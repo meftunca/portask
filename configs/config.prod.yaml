@@ -1,0 +1,80 @@
+# Portask Production Configuration
+# Ultra-optimized for maximum performance and minimal resource usage
+
+serialization:
+  type: "cbor"  # Most efficient binary format
+  cbor:
+    deterministic: true
+    time_mode: 1
+
+compression:
+  type: "lz4"  # Fastest compression with good ratio
+  strategy: "adaptive"
+  level: 1  # Fastest compression level
+  threshold_bytes: 128  # Lower threshold for production
+  batch_size: 500  # Larger batches for better compression
+  
+  lz4:
+    compression_level: 1
+    fast_acceleration: 32  # Maximum speed
+    block_mode: true
+  
+  adaptive:
+    cpu_threshold_high: 70.0  # More aggressive thresholds
+    cpu_threshold_low: 30.0
+    memory_threshold_high: 80.0
+    latency_threshold_ms: 5  # Stricter latency requirements
+    monitor_interval: "1s"
+
+network:
+  custom_port: 8080
+  kafka_port: 9092
+  rabbitmq_port: 5672
+  admin_port: 8081
+  keep_alive: true
+  no_delay: true
+  read_timeout_ms: 3000  # Shorter timeouts for production
+  write_timeout_ms: 3000
+
+storage:
+  type: "dragonfly"
+  connection_timeout: "3s"
+  read_timeout: "1s"
+  write_timeout: "1s"
+  pool_size: 200  # Larger pool for production
+  min_idle_conns: 20
+  max_retries: 5
+  retry_backoff: "50ms"
+  
+  dragonfly:
+    addresses:
+      - "dragonfly-1:6379"
+      - "dragonfly-2:6379"
+      - "dragonfly-3:6379"
+    password: "${DRAGONFLY_PASSWORD}"
+    db: 0
+
+performance:
+  worker_pool_size: 500  # Maximum workers for production
+  channel_buffer_size: 5000
+  batch_processing: true
+  batch_size: 1000
+  batch_timeout: "5ms"
+  memory_pool_enabled: true
+  zero_copy_enabled: true
+  use_memory_mapping: true  # Enable for large message handling
+
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  metrics_path: "/metrics"
+  collect_interval: "500ms"  # High-frequency monitoring
+  enable_profiling: false  # Disable profiling in production
+  profiling_port: 6060
+  health_check_path: "/health"
+
+logging:
+  level: "warn"  # Minimal logging for performance
+  format: "json"
+  output: "stdout"
+  enable_color: false

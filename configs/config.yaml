@@ -1,0 +1,100 @@
+# Portask High-Performance Configuration
+# Optimized for maximum RPS and minimal memory usage
+
+serialization:
+  type: "cbor"  # Options: cbor, json, msgpack, protobuf, avro
+  cbor:
+    deterministic: true
+    time_mode: 1  # RFC3339 format
+  json:
+    compact: true
+    escape_html: false
+  msgpack:
+    use_array_encoded_structs: true
+
+compression:
+  type: "zstd"  # Options: none, zstd, lz4, snappy, gzip, brotli
+  strategy: "adaptive"  # Options: always, threshold, adaptive, never
+  level: 3  # Compression level (1-22 for zstd)
+  threshold_bytes: 256  # Minimum message size to compress
+  batch_size: 100  # Number of messages to batch before compression
+  
+  zstd:
+    window_size: 19  # 512KB window (2^19)
+    use_dict: false  # Dictionary compression for repetitive data
+    dict_size: 16384
+    concurrency_mode: 1
+  
+  lz4:
+    compression_level: 1
+    fast_acceleration: 1
+    block_mode: true
+  
+  adaptive:
+    cpu_threshold_high: 80.0  # CPU % to reduce compression
+    cpu_threshold_low: 40.0
+    memory_threshold_high: 85.0  # Memory % to reduce compression
+    latency_threshold_ms: 10  # Max latency before reducing compression
+    monitor_interval: "5s"
+
+network:
+  custom_port: 8080
+  kafka_port: 9092
+  rabbitmq_port: 5672
+  admin_port: 8081
+  keep_alive: true
+  no_delay: true  # TCP_NODELAY for low latency
+  read_timeout_ms: 5000
+  write_timeout_ms: 5000
+
+storage:
+  type: "dragonfly"  # Options: dragonfly, redis, memory
+  connection_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+  pool_size: 100
+  min_idle_conns: 10
+  max_retries: 3
+  retry_backoff: "100ms"
+  
+  dragonfly:
+    addresses:
+      - "localhost:6379"
+    password: ""
+    db: 0
+  
+  redis:
+    addresses:
+      - "localhost:6379"
+    password: ""
+    db: 0
+  
+  memory:
+    max_memory_mb: 1024
+    eviction_policy: "lru"  # lru, lfu, fifo
+    persist_interval_sec: 60
+
+performance:
+  worker_pool_size: 100  # Number of worker goroutines
+  channel_buffer_size: 1000  # Channel buffer sizes
+  batch_processing: true
+  batch_size: 100
+  batch_timeout: "10ms"
+  memory_pool_enabled: true  # Use object pools to reduce GC
+  zero_copy_enabled: true    # Zero-copy optimizations where possible
+  use_memory_mapping: false  # Memory mapping for large messages
+
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  metrics_path: "/metrics"
+  collect_interval: "1s"
+  enable_profiling: false
+  profiling_port: 6060
+  health_check_path: "/health"
+
+logging:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json, console
+  output: "stdout"  # stdout, stderr, file path
+  enable_color: false

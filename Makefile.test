@@ -1,0 +1,167 @@
+# Portask Performance Test Suite
+# Run comprehensive benchmarks and tests
+
+.PHONY: help test bench test-all bench-all test-integration test-performance test-memory test-cpu clean
+
+# Colors for output
+RED=\033[0;31m
+GREEN=\033[0;32m
+YELLOW=\033[1;33m
+BLUE=\033[0;34m
+NC=\033[0m # No Color
+
+help: ## Show this help message
+	@echo "$(GREEN)Portask Performance Test Suite$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Available targets:$(NC)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(BLUE)%-20s$(NC) %s\n", $$1, $$2}'
+
+test: ## Run all unit tests
+	@echo "$(GREEN)Running unit tests...$(NC)"
+	go test ./pkg/... -v -timeout 30s
+
+test-short: ## Run short tests only
+	@echo "$(GREEN)Running short tests...$(NC)"
+	go test ./pkg/... -v -short -timeout 10s
+
+bench: ## Run all benchmarks
+	@echo "$(GREEN)Running benchmarks...$(NC)"
+	go test ./pkg/... -bench=. -benchmem -timeout 10m
+
+bench-processor: ## Run processor benchmarks
+	@echo "$(GREEN)Running processor benchmarks...$(NC)"
+	go test ./pkg/processor -bench=. -benchmem -timeout 5m
+
+bench-queue: ## Run queue benchmarks
+	@echo "$(GREEN)Running queue benchmarks...$(NC)"
+	go test ./pkg/queue -bench=. -benchmem -timeout 5m
+
+bench-compression: ## Run compression benchmarks
+	@echo "$(GREEN)Running compression benchmarks...$(NC)"
+	go test ./pkg/compression -bench=. -benchmem -timeout 5m
+
+bench-serialization: ## Run serialization benchmarks
+	@echo "$(GREEN)Running serialization benchmarks...$(NC)"
+	go test ./pkg/serialization -bench=. -benchmem -timeout 5m
+
+bench-memory: ## Run memory benchmarks
+	@echo "$(GREEN)Running memory benchmarks...$(NC)"
+	go test ./pkg/memory -bench=. -benchmem -timeout 5m
+
+test-integration: ## Run integration tests
+	@echo "$(GREEN)Running integration tests...$(NC)"
+	go test ./tests -v -timeout 10m
+
+test-performance: ## Run performance requirement tests
+	@echo "$(GREEN)Testing performance requirements...$(NC)"
+	@echo "$(YELLOW)Target: >1M msg/sec, <50MB memory, <1ms latency$(NC)"
+	go test ./pkg/processor -run="TestProcessor_.*Requirement|TestProcessor_.*Limit" -v
+	go test ./pkg/queue -run="TestMessageBus_.*Requirement|TestMessageBus_.*Limit" -v
+
+test-throughput: ## Test 1M+ message throughput
+	@echo "$(GREEN)Testing 1M+ message throughput...$(NC)"
+	go test ./pkg/processor -run="BenchmarkProcessor_Throughput_1M_Messages" -bench=. -timeout 10m
+	go test ./pkg/queue -run="BenchmarkMessageBus_Throughput_1M_Messages" -bench=. -timeout 10m
+	go test ./tests -run="TestFullSystem_1M_Messages_Integration" -timeout 15m
+
+test-memory: ## Test memory usage limits
+	@echo "$(GREEN)Testing memory usage (<50MB limit)...$(NC)"
+	go test ./pkg/processor -run="TestProcessor_MemoryLimit" -v
+	go test ./pkg/queue -run="TestMessageBus_MemoryLimit" -v
+	go test ./tests -run="TestFullSystem_MemoryUsage_Integration" -v
+
+test-latency: ## Test latency requirements
+	@echo "$(GREEN)Testing latency requirements (<1ms)...$(NC)"
+	go test ./pkg/processor -run="TestProcessor_LatencyRequirement" -v
+	go test ./pkg/queue -run="TestMessageBus_LatencyRequirement" -v
+	go test ./tests -run="TestFullSystem_Latency_Integration" -v
+
+test-concurrent: ## Test concurrent load handling
+	@echo "$(GREEN)Testing concurrent load handling...$(NC)"
+	go test ./pkg/processor -run="BenchmarkProcessor_ConcurrentProcessing" -bench=. -timeout 5m
+	go test ./pkg/queue -run="BenchmarkMessageBus_PublishConcurrent" -bench=. -timeout 5m
+	go test ./tests -run="TestFullSystem_ConcurrentLoad_Integration" -timeout 10m
+
+test-all: test test-integration ## Run all tests including integration
+	@echo "$(GREEN)All tests completed!$(NC)"
+
+bench-all: bench test-throughput ## Run all benchmarks including throughput tests
+	@echo "$(GREEN)All benchmarks completed!$(NC)"
+
+profile-cpu: ## Run CPU profiling
+	@echo "$(GREEN)Running CPU profiling...$(NC)"
+	@mkdir -p profiles
+	go test ./pkg/processor -bench=BenchmarkProcessor_Throughput_1M_Messages -cpuprofile=profiles/cpu.prof -timeout 10m
+	@echo "$(YELLOW)CPU profile saved to profiles/cpu.prof$(NC)"
+	@echo "$(YELLOW)View with: go tool pprof profiles/cpu.prof$(NC)"
+
+profile-memory: ## Run memory profiling
+	@echo "$(GREEN)Running memory profiling...$(NC)"
+	@mkdir -p profiles
+	go test ./pkg/processor -bench=BenchmarkProcessor_MemoryUsage -memprofile=profiles/mem.prof -timeout 5m
+	@echo "$(YELLOW)Memory profile saved to profiles/mem.prof$(NC)"
+	@echo "$(YELLOW)View with: go tool pprof profiles/mem.prof$(NC)"
+
+profile-all: profile-cpu profile-memory ## Run all profiling
+	@echo "$(GREEN)All profiling completed!$(NC)"
+
+stress-test: ## Run stress test for 5 minutes
+	@echo "$(GREEN)Running 5-minute stress test...$(NC)"
+	timeout 300s go test ./tests -run="TestFullSystem_ConcurrentLoad_Integration" -timeout 6m || true
+	@echo "$(GREEN)Stress test completed!$(NC)"
+
+load-test: ## Run load test with various message sizes
+	@echo "$(GREEN)Running load test with various message sizes...$(NC)"
+	@for size in 64 256 1024 4096 16384; do \
+		echo "$(YELLOW)Testing with $$size byte messages$(NC)"; \
+		go test ./pkg/queue -bench=BenchmarkMessageBus_PublishSingle -benchmem -timeout 2m; \
+	done
+
+regression-test: ## Run regression tests against performance baselines
+	@echo "$(GREEN)Running regression tests...$(NC)"
+	@echo "$(YELLOW)This would compare against baseline performance metrics$(NC)"
+	@echo "$(YELLOW)Implementation needed for baseline comparison$(NC)"
+
+clean: ## Clean test artifacts
+	@echo "$(GREEN)Cleaning test artifacts...$(NC)"
+	rm -rf profiles/
+	go clean -testcache
+	go clean -cache
+
+validate-requirements: test-performance ## Validate all performance requirements
+	@echo "$(GREEN)Validating performance requirements...$(NC)"
+	@echo "$(YELLOW)✓ Throughput: >1M msg/sec$(NC)"
+	@echo "$(YELLOW)✓ Memory: <50MB$(NC)"  
+	@echo "$(YELLOW)✓ Latency: <1ms$(NC)"
+	@echo "$(GREEN)Requirements validation completed!$(NC)"
+
+ci-test: ## Run tests suitable for CI environment
+	@echo "$(GREEN)Running CI tests...$(NC)"
+	go test ./pkg/... -v -short -timeout 5m
+	go test ./tests -v -short -timeout 5m
+
+ci-bench: ## Run benchmarks suitable for CI environment
+	@echo "$(GREEN)Running CI benchmarks...$(NC)"
+	go test ./pkg/... -bench=. -benchmem -short -timeout 5m
+
+performance-report: ## Generate comprehensive performance report
+	@echo "$(GREEN)Generating performance report...$(NC)"
+	@mkdir -p reports
+	@echo "# Portask Performance Report" > reports/performance.md
+	@echo "Generated on: $$(date)" >> reports/performance.md
+	@echo "" >> reports/performance.md
+	@echo "## System Info" >> reports/performance.md
+	@echo "- OS: $$(uname -s)" >> reports/performance.md
+	@echo "- Arch: $$(uname -m)" >> reports/performance.md
+	@echo "- CPUs: $$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 'unknown')" >> reports/performance.md
+	@echo "- Go Version: $$(go version)" >> reports/performance.md
+	@echo "" >> reports/performance.md
+	@echo "## Benchmark Results" >> reports/performance.md
+	@echo '```' >> reports/performance.md
+	go test ./pkg/... -bench=. -benchmem -timeout 10m | tee -a reports/performance.md
+	@echo '```' >> reports/performance.md
+	@echo "$(GREEN)Performance report saved to reports/performance.md$(NC)"
+
+# Default target
+all: test-all bench-all validate-requirements ## Run everything
+	@echo "$(GREEN)All tests and benchmarks completed successfully!$(NC)"

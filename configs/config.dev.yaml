@@ -1,0 +1,52 @@
+# Portask Development Configuration
+# Optimized for development with detailed logging and debugging
+
+serialization:
+  type: "json"  # JSON for easier debugging
+  json:
+    compact: false  # Pretty print for readability
+    escape_html: false
+
+compression:
+  type: "none"  # Disable compression for development
+  strategy: "never"
+
+network:
+  custom_port: 8080
+  kafka_port: 9092
+  rabbitmq_port: 5672
+  admin_port: 8081
+  keep_alive: true
+  no_delay: true
+  read_timeout_ms: 10000  # Longer timeouts for debugging
+  write_timeout_ms: 10000
+
+storage:
+  type: "memory"  # In-memory storage for development
+  memory:
+    max_memory_mb: 512
+    eviction_policy: "lru"
+    persist_interval_sec: 300
+
+performance:
+  worker_pool_size: 10
+  channel_buffer_size: 100
+  batch_processing: false
+  memory_pool_enabled: false
+  zero_copy_enabled: false
+  use_memory_mapping: false
+
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  metrics_path: "/metrics"
+  collect_interval: "5s"
+  enable_profiling: true  # Enable profiling for development
+  profiling_port: 6060
+  health_check_path: "/health"
+
+logging:
+  level: "debug"
+  format: "console"  # Console format for development
+  output: "stdout"
+  enable_color: true
