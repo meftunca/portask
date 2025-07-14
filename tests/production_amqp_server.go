@@ -84,7 +84,7 @@ func runProductionTest() {
 	log.Printf("🎯 Ready for production workloads!")
 	log.Printf("")
 	log.Printf("📊 Supported Features:")
-	log.Printf("   ✅ AMQP 0-9-1 Protocol (100%)")
+	log.Printf("   ✅ AMQP 0-9-1 Protocol (100%%)")
 	log.Printf("   ✅ Exchange Types: Direct, Fanout, Topic, Headers")
 	log.Printf("   ✅ Queue Operations: Declare, Bind, Delete with TTL")
 	log.Printf("   ✅ Message Publishing with Routing")
@@ -138,5 +138,5 @@ func runProductionTest() {
 	}
 
 	log.Printf("✅ Production server stopped gracefully")
-	log.Printf("🎉 RabbitMQ entegrasyon %100 tamamlandı!")
+	log.Printf("🎉 RabbitMQ entegrasyon %%100 tamamlandı!")
 }

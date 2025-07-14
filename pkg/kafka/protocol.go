@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -398,6 +399,26 @@ func (h *KafkaProtocolHandler) handleRequest(request *KafkaRequest) (*KafkaRespo
 		response.Body = h.handleSaslHandshake(request)
 	case SaslAuthenticateAPI:
 		response.Body = h.handleSaslAuthenticate(request)
+	case DescribeGroupsAPI:
+		response.Body = h.handleDescribeGroups(request)
+	case OffsetCommitAPI:
+		response.Body = h.handleOffsetCommit(request)
+	case OffsetFetchAPI:
+		response.Body = h.handleOffsetFetch(request)
+	case FindCoordinatorAPI:
+		response.Body = h.handleFindCoordinator(request)
+	case JoinGroupAPI:
+		response.Body = h.handleJoinGroup(request)
+	case SyncGroupAPI:
+		response.Body = h.handleSyncGroup(request)
+	case HeartbeatAPI:
+		response.Body = h.handleHeartbeat(request)
+	case InitProducerIdAPI:
+		response.Body = h.handleInitProducerId(request)
+	case AddPartitionsToTxnAPI:
+		response.Body = h.handleAddPartitionsToTxn(request)
+	case EndTxnAPI:
+		response.Body = h.handleEndTxn(request)
 	default:
 		// Unsupported API
 		response.Body = h.createErrorResponse(UnsupportedVersion)
@@ -470,434 +491,250 @@ func (h *KafkaProtocolHandler) createErrorResponse(errorCode int16) []byte {
 	return buf.Bytes()
 }
 
-// Advanced Kafka Features
+// =====================
+// TOPLU EKLENEN KAFKA HANDLER İSKELETLERİ
+// =====================
 
-// Consumer Group Management
-type ConsumerGroup struct {
-	GroupID     string
-	Members     map[string]*GroupMember
-	Coordinator string
-	State       GroupState
-	Protocol    string
-	Leader      string
+// Consumer Group Management Handlers
+func (h *KafkaProtocolHandler) handleJoinGroup(request *KafkaRequest) []byte {
+	// TODO: Implement JoinGroup logic
+	return h.createErrorResponse(UnsupportedVersion)
+}
+func (h *KafkaProtocolHandler) handleSyncGroup(request *KafkaRequest) []byte {
+	// TODO: Implement SyncGroup logic
+	return h.createErrorResponse(UnsupportedVersion)
+}
+func (h *KafkaProtocolHandler) handleHeartbeat(request *KafkaRequest) []byte {
+	// TODO: Implement Heartbeat logic
+	return h.createErrorResponse(UnsupportedVersion)
+}
+func (h *KafkaProtocolHandler) handleDescribeGroups(request *KafkaRequest) []byte {
+	// TODO: Implement DescribeGroups response
+	return h.createErrorResponse(UnsupportedVersion)
+}
+func (h *KafkaProtocolHandler) handleOffsetCommit(request *KafkaRequest) []byte {
+	// TODO: Implement OffsetCommit response
+	return h.createErrorResponse(UnsupportedVersion)
+}
+func (h *KafkaProtocolHandler) handleOffsetFetch(request *KafkaRequest) []byte {
+	// TODO: Implement OffsetFetch response
+	return h.createErrorResponse(UnsupportedVersion)
+}
+func (h *KafkaProtocolHandler) handleFindCoordinator(request *KafkaRequest) []byte {
+	// TODO: Implement FindCoordinator response
+	return h.createErrorResponse(UnsupportedVersion)
 }
 
-type GroupMember struct {
-	MemberID       string
-	ClientID       string
-	ClientHost     string
-	Metadata       []byte
-	Assignment     []byte
-	SessionTimeout int32
+// Transaction Handlers
+func (h *KafkaProtocolHandler) handleInitProducerId(request *KafkaRequest) []byte {
+	// TODO: Implement InitProducerId logic
+	return h.createErrorResponse(UnsupportedVersion)
+}
+func (h *KafkaProtocolHandler) handleAddPartitionsToTxn(request *KafkaRequest) []byte {
+	// TODO: Implement AddPartitionsToTxn logic
+	return h.createErrorResponse(UnsupportedVersion)
+}
+func (h *KafkaProtocolHandler) handleEndTxn(request *KafkaRequest) []byte {
+	// TODO: Implement EndTxn logic
+	return h.createErrorResponse(UnsupportedVersion)
 }
 
-type GroupState int
+// Schema Registry Handler (iskele)
+func (h *KafkaProtocolHandler) handleSchemaRegistry(request *KafkaRequest) []byte {
+	// TODO: Implement Schema Registry logic
+	return h.createErrorResponse(UnsupportedVersion)
+}
 
-const (
-	PreparingRebalance GroupState = iota
-	CompletingRebalance
-	Stable
-	Dead
-	Empty
+// Advanced Auth Handler (iskele)
+func (h *KafkaProtocolHandler) handleAdvancedAuth(request *KafkaRequest) []byte {
+	// TODO: Implement Advanced Auth logic
+	return h.createErrorResponse(UnsupportedVersion)
+}
+
+// =====================
+// MODERN CONSUMER GROUP, OFFSET, PARTITION MANAGEMENT (THREAD-SAFE)
+// =====================
+type ConsumerGroupState struct {
+	Members map[string]*ConsumerGroupMember // memberID -> member
+	Offsets map[string]map[int32]int64      // topic -> partition -> offset
+	Mutex   sync.RWMutex
+}
+
+type ConsumerGroupMember struct {
+	MemberID    string
+	ClientID    string
+	Assignments map[string][]int32 // topic -> partitions
+}
+
+var (
+	consumerGroups      = make(map[string]*ConsumerGroupState)
+	consumerGroupsMutex sync.RWMutex
 )
 
-// Advanced Authentication
-type KafkaAuthProvider struct {
-	users      map[string]*KafkaUser
-	mechanisms []string
-	superUsers map[string]bool
-}
-
-type KafkaUser struct {
-	Username    string
-	Password    string
-	Mechanisms  []string
-	Permissions map[string][]string // resource -> [operations]
-}
-
-// Schema Registry Support
-type SchemaRegistry struct {
-	schemas  map[int]*Schema
-	subjects map[string][]*Schema
-	nextID   int
-}
-
-type Schema struct {
-	ID      int
-	Subject string
-	Version int
-	Schema  string
-	Type    SchemaType
-}
-
-type SchemaType int
-
-const (
-	AvroSchema SchemaType = iota
-	JSONSchema
-	ProtobufSchema
-)
-
-// Transaction Support
-type TransactionManager struct {
-	transactions map[string]*Transaction
-	idGenerator  *TransactionIDGenerator
-}
-
-type Transaction struct {
-	TransactionID string
-	ProducerID    int64
-	Epoch         int16
-	State         TransactionState
-	Partitions    map[string][]int32
-	StartTime     time.Time
-	Timeout       time.Duration
-}
-
-type TransactionState int
-
-const (
-	TransactionEmpty TransactionState = iota
-	TransactionOngoing
-	TransactionPrepareCommit
-	TransactionPrepareAbort
-	TransactionCompleteCommit
-	TransactionCompleteAbort
-)
-
-type TransactionIDGenerator struct {
-	currentID int64
-}
-
-// Advanced Kafka Protocol Handler
-func NewAdvancedKafkaProtocolHandler(store MessageStore) *AdvancedKafkaProtocolHandler {
-	return &AdvancedKafkaProtocolHandler{
-		messageStore:   store,
-		consumerGroups: make(map[string]*ConsumerGroup),
-		schemaRegistry: &SchemaRegistry{
-			schemas:  make(map[int]*Schema),
-			subjects: make(map[string][]*Schema),
-			nextID:   1,
-		},
-		transactionManager: &TransactionManager{
-			transactions: make(map[string]*Transaction),
-			idGenerator:  &TransactionIDGenerator{currentID: 1},
-		},
-		authProvider: &KafkaAuthProvider{
-			users:      make(map[string]*KafkaUser),
-			mechanisms: []string{"PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"},
-			superUsers: make(map[string]bool),
-		},
-	}
-}
-
-type AdvancedKafkaProtocolHandler struct {
-	messageStore       MessageStore
-	consumerGroups     map[string]*ConsumerGroup
-	schemaRegistry     *SchemaRegistry
-	transactionManager *TransactionManager
-	authProvider       *KafkaAuthProvider
-}
-
-// SASL Authentication Implementation
-func (h *AdvancedKafkaProtocolHandler) handleSASLAuthenticate(conn net.Conn, mechanism string) error {
-	switch mechanism {
-	case "PLAIN":
-		return h.handleSASLPlain(conn)
-	case "SCRAM-SHA-256":
-		return h.handleSASLScram(conn, "SHA-256")
-	case "SCRAM-SHA-512":
-		return h.handleSASLScram(conn, "SHA-512")
-	default:
-		return fmt.Errorf("unsupported SASL mechanism: %s", mechanism)
-	}
-}
-
-func (h *AdvancedKafkaProtocolHandler) handleSASLPlain(conn net.Conn) error {
-	// Read SASL PLAIN authentication data
-	authData := make([]byte, 1024)
-	n, err := conn.Read(authData)
-	if err != nil {
-		return fmt.Errorf("failed to read SASL PLAIN data: %w", err)
-	}
-
-	// Parse PLAIN format: [authzid]\0username\0password
-	parts := bytes.Split(authData[:n], []byte{0})
-	if len(parts) < 3 {
-		return fmt.Errorf("invalid SASL PLAIN format")
-	}
-
-	username := string(parts[1])
-	password := string(parts[2])
-
-	// Authenticate user
-	user, err := h.authProvider.Authenticate("PLAIN", username, password)
-	if err != nil {
-		return fmt.Errorf("authentication failed: %w", err)
-	}
-
-	fmt.Printf("✅ SASL PLAIN authentication successful for user: %s", user.Username)
-	return nil
-}
-
-func (h *AdvancedKafkaProtocolHandler) handleSASLScram(conn net.Conn, algorithm string) error {
-	// Simplified SCRAM implementation
-	// Production would implement full SCRAM-SHA-256/512 protocol
-	fmt.Printf("🔐 SCRAM-%s authentication initiated", algorithm)
-
-	// For demo, accept any SCRAM attempt
-	response := []byte("SCRAM authentication successful")
-	_, err := conn.Write(response)
-	return err
-}
-
-// Consumer Group Protocol
-func (h *AdvancedKafkaProtocolHandler) handleJoinGroup(groupID, memberID, protocolType string, protocols []GroupProtocol) (*JoinGroupResponse, error) {
-	group, exists := h.consumerGroups[groupID]
-	if !exists {
-		// Create new group
-		group = &ConsumerGroup{
-			GroupID:  groupID,
-			Members:  make(map[string]*GroupMember),
-			State:    Empty,
-			Protocol: protocolType,
+// Offset Commit
+func CommitOffset(group, topic string, partition int32, offset int64) {
+	consumerGroupsMutex.Lock()
+	cg, ok := consumerGroups[group]
+	if !ok {
+		cg = &ConsumerGroupState{
+			Members: make(map[string]*ConsumerGroupMember),
+			Offsets: make(map[string]map[int32]int64),
 		}
-		h.consumerGroups[groupID] = group
+		consumerGroups[group] = cg
 	}
-
-	// Add member to group
-	member := &GroupMember{
-		MemberID:   memberID,
-		ClientID:   "portask-consumer",
-		ClientHost: "localhost",
-		Metadata:   []byte{},
+	cg.Mutex.Lock()
+	if cg.Offsets[topic] == nil {
+		cg.Offsets[topic] = make(map[int32]int64)
 	}
-	group.Members[memberID] = member
-
-	// Set leader if first member
-	if len(group.Members) == 1 {
-		group.Leader = memberID
-	}
-
-	group.State = PreparingRebalance
-
-	fmt.Printf("👥 Consumer joined group %s: %s", groupID, memberID)
-
-	return &JoinGroupResponse{
-		ErrorCode:     0,
-		GenerationID:  1,
-		GroupProtocol: protocolType,
-		LeaderID:      group.Leader,
-		MemberID:      memberID,
-		Members:       convertGroupMembers(group.Members),
-	}, nil
+	cg.Offsets[topic][partition] = offset
+	cg.Mutex.Unlock()
+	consumerGroupsMutex.Unlock()
+	log.Printf("[Kafka] Offset committed: group=%s topic=%s partition=%d offset=%d", group, topic, partition, offset)
 }
 
-func (h *AdvancedKafkaProtocolHandler) handleSyncGroup(groupID, memberID string, generation int32, assignments []GroupAssignment) (*SyncGroupResponse, error) {
-	group, exists := h.consumerGroups[groupID]
-	if !exists {
-		return &SyncGroupResponse{ErrorCode: 25}, fmt.Errorf("unknown group: %s", groupID) // UnknownMemberID
+// Offset Fetch
+func FetchOffset(group, topic string, partition int32) int64 {
+	consumerGroupsMutex.RLock()
+	cg, ok := consumerGroups[group]
+	if !ok {
+		consumerGroupsMutex.RUnlock()
+		return 0
 	}
-
-	member, exists := group.Members[memberID]
-	if !exists {
-		return &SyncGroupResponse{ErrorCode: 25}, fmt.Errorf("unknown member: %s", memberID)
-	}
-
-	// Apply assignment
-	if len(assignments) > 0 {
-		member.Assignment = assignments[0].Assignment
-	}
-
-	group.State = Stable
-
-	fmt.Printf("🔄 Consumer group synchronized: %s", groupID)
-
-	return &SyncGroupResponse{
-		ErrorCode:  0,
-		Assignment: member.Assignment,
-	}, nil
+	cg.Mutex.RLock()
+	offset := cg.Offsets[topic][partition]
+	cg.Mutex.RUnlock()
+	consumerGroupsMutex.RUnlock()
+	return offset
 }
 
-// Transaction Support
-func (h *AdvancedKafkaProtocolHandler) handleInitProducerID(transactionalID string) (*InitProducerIDResponse, error) {
-	producerID := h.transactionManager.idGenerator.currentID
-	h.transactionManager.idGenerator.currentID++
-
-	if transactionalID != "" {
-		// Create transaction
-		transaction := &Transaction{
-			TransactionID: transactionalID,
-			ProducerID:    producerID,
-			Epoch:         0,
-			State:         TransactionEmpty,
-			Partitions:    make(map[string][]int32),
-			StartTime:     time.Now(),
-			Timeout:       60 * time.Second,
+// Consumer Group Join
+func JoinConsumerGroup(group, memberID, clientID string, assignments map[string][]int32) {
+	consumerGroupsMutex.Lock()
+	cg, ok := consumerGroups[group]
+	if !ok {
+		cg = &ConsumerGroupState{
+			Members: make(map[string]*ConsumerGroupMember),
+			Offsets: make(map[string]map[int32]int64),
 		}
-		h.transactionManager.transactions[transactionalID] = transaction
-
-		fmt.Printf("🔄 Transaction initialized: %s (producer: %d)", transactionalID, producerID)
+		consumerGroups[group] = cg
 	}
-
-	return &InitProducerIDResponse{
-		ErrorCode:  0,
-		ProducerID: producerID,
-		Epoch:      0,
-	}, nil
+	cg.Mutex.Lock()
+	cg.Members[memberID] = &ConsumerGroupMember{
+		MemberID:    memberID,
+		ClientID:    clientID,
+		Assignments: assignments,
+	}
+	cg.Mutex.Unlock()
+	consumerGroupsMutex.Unlock()
+	log.Printf("[Kafka] Consumer joined group=%s member=%s", group, memberID)
 }
 
-func (h *AdvancedKafkaProtocolHandler) handleBeginTransaction(transactionalID string) error {
-	transaction, exists := h.transactionManager.transactions[transactionalID]
-	if !exists {
-		return fmt.Errorf("unknown transaction: %s", transactionalID)
+// MODERN IN-MEMORY THREAD-SAFE KAFKA QUEUE MANAGEMENT
+type InMemoryMessageStore struct {
+	topics map[string]*InMemoryTopic
+	mutex  sync.RWMutex
+}
+
+type InMemoryTopic struct {
+	Name       string
+	Partitions map[int32][]*Message
+}
+
+func NewInMemoryMessageStore() *InMemoryMessageStore {
+	return &InMemoryMessageStore{
+		topics: make(map[string]*InMemoryTopic),
 	}
+}
 
-	transaction.State = TransactionOngoing
-	transaction.StartTime = time.Now()
-
-	fmt.Printf("🚀 Transaction started: %s", transactionalID)
+func (s *InMemoryMessageStore) CreateTopic(topic string, partitions int32, replication int16) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if _, exists := s.topics[topic]; exists {
+		return nil
+	}
+	partMap := make(map[int32][]*Message)
+	for i := int32(0); i < partitions; i++ {
+		partMap[i] = []*Message{}
+	}
+	s.topics[topic] = &InMemoryTopic{
+		Name:       topic,
+		Partitions: partMap,
+	}
+	log.Printf("[Kafka] Topic created: %s (partitions=%d)", topic, partitions)
 	return nil
 }
 
-func (h *AdvancedKafkaProtocolHandler) handleCommitTransaction(transactionalID string) error {
-	transaction, exists := h.transactionManager.transactions[transactionalID]
+func (s *InMemoryMessageStore) ProduceMessage(topic string, partition int32, key, value []byte) (int64, error) {
+	s.mutex.Lock()
+	t, exists := s.topics[topic]
 	if !exists {
-		return fmt.Errorf("unknown transaction: %s", transactionalID)
+		s.mutex.Unlock()
+		return 0, fmt.Errorf("topic not found: %s", topic)
 	}
-
-	transaction.State = TransactionCompleteCommit
-
-	fmt.Printf("✅ Transaction committed: %s", transactionalID)
-	return nil
-}
-
-// Schema Registry
-func (h *AdvancedKafkaProtocolHandler) registerSchema(subject, schemaStr string, schemaType SchemaType) (*Schema, error) {
-	schema := &Schema{
-		ID:      h.schemaRegistry.nextID,
-		Subject: subject,
-		Version: 1,
-		Schema:  schemaStr,
-		Type:    schemaType,
+	msgs := t.Partitions[partition]
+	offset := int64(len(msgs))
+	msg := &Message{
+		Offset:    offset,
+		Key:       key,
+		Value:     value,
+		Timestamp: time.Now(),
+		Headers:   map[string][]byte{},
 	}
-
-	h.schemaRegistry.schemas[schema.ID] = schema
-	h.schemaRegistry.subjects[subject] = append(h.schemaRegistry.subjects[subject], schema)
-	h.schemaRegistry.nextID++
-
-	fmt.Printf("📄 Schema registered: %s (ID: %d)", subject, schema.ID)
-	return schema, nil
+	t.Partitions[partition] = append(msgs, msg)
+	s.mutex.Unlock()
+	log.Printf("[Kafka] Produced message to %s[%d] offset=%d", topic, partition, offset)
+	return offset, nil
 }
 
-// Helper types for protocol responses
-type GroupProtocol struct {
-	Name     string
-	Metadata []byte
-}
-
-type JoinGroupResponse struct {
-	ErrorCode     int16
-	GenerationID  int32
-	GroupProtocol string
-	LeaderID      string
-	MemberID      string
-	Members       []GroupMemberMetadata
-}
-
-type GroupMemberMetadata struct {
-	MemberID string
-	Metadata []byte
-}
-
-type GroupAssignment struct {
-	MemberID   string
-	Assignment []byte
-}
-
-type SyncGroupResponse struct {
-	ErrorCode  int16
-	Assignment []byte
-}
-
-type InitProducerIDResponse struct {
-	ErrorCode  int16
-	ProducerID int64
-	Epoch      int16
-}
-
-func convertGroupMembers(members map[string]*GroupMember) []GroupMemberMetadata {
-	result := make([]GroupMemberMetadata, 0, len(members))
-	for _, member := range members {
-		result = append(result, GroupMemberMetadata{
-			MemberID: member.MemberID,
-			Metadata: member.Metadata,
-		})
-	}
-	return result
-}
-
-func (auth *KafkaAuthProvider) Authenticate(mechanism, username, password string) (*KafkaUser, error) {
-	user, exists := auth.users[username]
+func (s *InMemoryMessageStore) ConsumeMessages(topic string, partition int32, offset int64, maxBytes int32) ([]*Message, error) {
+	s.mutex.RLock()
+	t, exists := s.topics[topic]
 	if !exists {
-		return nil, fmt.Errorf("user not found: %s", username)
+		s.mutex.RUnlock()
+		return nil, fmt.Errorf("topic not found: %s", topic)
 	}
-
-	// Check mechanism support
-	supported := false
-	for _, mech := range user.Mechanisms {
-		if mech == mechanism {
-			supported = true
+	msgs := t.Partitions[partition]
+	if int(offset) >= len(msgs) {
+		s.mutex.RUnlock()
+		return []*Message{}, nil
+	}
+	result := []*Message{}
+	size := int32(0)
+	for i := offset; i < int64(len(msgs)); i++ {
+		m := msgs[i]
+		size += int32(len(m.Value))
+		if size > maxBytes && len(result) > 0 {
 			break
 		}
+		result = append(result, m)
 	}
-
-	if !supported {
-		return nil, fmt.Errorf("mechanism not supported: %s", mechanism)
-	}
-
-	// Simple password check (in production, use proper hashing)
-	if user.Password != password {
-		return nil, fmt.Errorf("invalid password")
-	}
-
-	return user, nil
+	s.mutex.RUnlock()
+	log.Printf("[Kafka] Fetched %d messages from %s[%d] starting at offset %d", len(result), topic, partition, offset)
+	return result, nil
 }
 
-func (h *AdvancedKafkaProtocolHandler) Start(addr string) error {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %w", addr, err)
+func (s *InMemoryMessageStore) GetTopicMetadata(topics []string) (*TopicMetadata, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	// Demo: sadece ilk topic için metadata döndür
+	if len(topics) == 0 {
+		return nil, fmt.Errorf("no topics requested")
 	}
-
-	log.Printf("⚡ Advanced Kafka Server listening on %s", addr)
-	log.Printf("✅ Features: SASL Auth, Consumer Groups, Transactions, Schema Registry")
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("Failed to accept connection: %v", err)
-			continue
-		}
-
-		go h.handleConnection(conn)
+	t, exists := s.topics[topics[0]]
+	if !exists {
+		return nil, fmt.Errorf("topic not found: %s", topics[0])
 	}
+	partitions := []PartitionMetadata{}
+	for pid := range t.Partitions {
+		partitions = append(partitions, PartitionMetadata{ID: pid, Leader: 1, Replicas: []int32{1}, ISR: []int32{1}})
+	}
+	return &TopicMetadata{Name: t.Name, Partitions: partitions, Error: 0}, nil
 }
 
-func (h *AdvancedKafkaProtocolHandler) handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	log.Printf("📞 New Kafka connection from %s", conn.RemoteAddr())
-
-	// Kafka protocol handling simulation
-	for {
-		buffer := make([]byte, 1024)
-		_, err := conn.Read(buffer)
-		if err != nil {
-			break
-		}
-		log.Printf("📨 Kafka request received")
-	}
-
-	log.Printf("❌ Kafka connection closed")
+func (s *InMemoryMessageStore) DeleteTopic(topic string) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	delete(s.topics, topic)
+	log.Printf("[Kafka] Topic deleted: %s", topic)
+	return nil
 }

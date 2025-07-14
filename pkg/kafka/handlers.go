@@ -413,3 +413,13 @@ func (h *KafkaProtocolHandler) handleSaslAuthenticate(request *KafkaRequest) []b
 
 	return buf.Bytes()
 }
+
+// Eksik handler fonksiyonları
+// DescribeGroups
+// TODO: handleDescribeGroups fonksiyonu protocol.go'da eklendi
+// OffsetCommit
+// TODO: handleOffsetCommit fonksiyonu protocol.go'da eklendi
+// OffsetFetch
+// TODO: handleOffsetFetch fonksiyonu protocol.go'da eklendi
+// FindCoordinator
+// TODO: handleFindCoordinator fonksiyonu protocol.go'da eklendi
