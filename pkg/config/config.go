@@ -51,8 +51,9 @@ type SerializationConfig struct {
 
 // JSONConfig holds JSON-specific settings
 type JSONConfig struct {
-	Compact    bool `mapstructure:"compact" yaml:"compact" json:"compact"`
-	EscapeHTML bool `mapstructure:"escape_html" yaml:"escape_html" json:"escape_html"`
+	Library    string `mapstructure:"library" yaml:"library" json:"library"` // "standard" or "sonic"
+	Compact    bool   `mapstructure:"compact" yaml:"compact" json:"compact"`
+	EscapeHTML bool   `mapstructure:"escape_html" yaml:"escape_html" json:"escape_html"`
 }
 
 // CBORConfig holds CBOR-specific settings
@@ -198,6 +199,7 @@ func DefaultConfig() *Config {
 		Serialization: SerializationConfig{
 			Type: SerializationCBOR,
 			JSONConfig: JSONConfig{
+				Library:    "standard",
 				Compact:    true,
 				EscapeHTML: false,
 			},

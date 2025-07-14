@@ -35,7 +35,7 @@ func main() {
 	log.Printf("✅ Kafka server instance created")
 
 	// Test RabbitMQ server creation
-	rabbitmqServer := amqp.NewRabbitMQServer(rabbitmqAddr, amqpStore)
+	rabbitmqServer := amqp.NewEnhancedAMQPServer(rabbitmqAddr, amqpStore)
 	log.Printf("✅ RabbitMQ server instance created")
 
 	log.Printf("🎯 Protocol Compatibility Status:")
@@ -99,4 +99,17 @@ func (d *DummyAMQPStore) PublishMessage(exchange, routingKey string, body []byte
 
 func (d *DummyAMQPStore) ConsumeMessages(queueName string, autoAck bool) ([][]byte, error) {
 	return [][]byte{}, nil
+}
+
+// Additional methods to implement MessageStore interface
+func (d *DummyAMQPStore) StoreMessage(topic string, message []byte) error {
+	return nil
+}
+
+func (d *DummyAMQPStore) GetMessages(topic string, offset int64) ([][]byte, error) {
+	return [][]byte{}, nil
+}
+
+func (d *DummyAMQPStore) GetTopics() []string {
+	return []string{}
 }

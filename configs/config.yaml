@@ -20,7 +20,7 @@ compression:
   batch_size: 100  # Number of messages to batch before compression
   
   zstd:
-    window_size: 19  # 512KB window (2^19)
+    window_size: 1024  # 1KB minimum window size
     use_dict: false  # Dictionary compression for repetitive data
     dict_size: 16384
     concurrency_mode: 1

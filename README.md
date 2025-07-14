@@ -106,31 +106,31 @@ Portask will feature a layered architecture:
 
 - **Objective:** Develop the high-performance internal messaging core and the custom Portask protocol, integrated with an abstract storage layer and dynamic configuration.
 - **To-Do List:**
-    - [ ] **Define Core Message Structure:**
-        - [ ] Design the canonical `PortaskMessage` struct in Go, including fields for ID, topic/queue, payload, headers, timestamp, etc.
-        - [ ] Add `cbor` struct tags for efficient serialization.
-    - [ ] **CBOR Serialization/Deserialization:**
-        - [ ] Implement `EncodeCBOR(message PortaskMessage) ([]byte, error)` function.
-        - [ ] Implement `DecodeCBOR([]byte) (PortaskMessage, error)` function.
-        - [ ] Write unit tests for CBOR encoding/decoding.
-    - [ ] **Zstd Compression/Decompression:**
-        - [ ] Implement `CompressZstd(data []byte, level zstd.EncoderLevel) ([]byte, error)`.
-        - [ ] Implement `DecompressZstd(compressedData []byte) ([]byte, error)`.
-        - [ ] Implement logic for **single message compression**.
-        - [ ] Implement logic for **bulk message compression** (batching multiple CBOR-encoded messages before Zstd compression).
-        - [ ] Implement **length prefixing** for each compressed message/batch to enable stream parsing.
-        - [ ] Write unit tests for Zstd compression/decompression.
-    - [ ] **`Storage`&#32;Interface Design:**
-        - [ ] Define `pkg/storage/storage.go` with an interface (e.g., `MessageStore`) for methods like `Store(msg PortaskMessage) error`, `Fetch(topic string, offset int) (PortaskMessage, error)`, `UpdateOffset(topic string, consumerID string, offset int) error`, etc.
-    - [ ] **Dragonfly Adapter Implementation:**
-        - [ ] Implement `pkg/storage/dragonfly.go` that satisfies the `MessageStore` interface.
-        - [ ] Use `go-redis/redis` client library to interact with Dragonfly.
-        - [ ] Map Portask concepts (topics, messages, offsets) to Redis data structures (e.g., Redis Streams, Lists, Hashes).
-        - [ ] Implement basic error handling and connection management for Dragonfly.
-        - [ ] Write unit tests for Dragonfly adapter (mocking Redis or using a test instance).
-    - [ ] **Configuration System:**
-        - [ ] Define a comprehensive `Config` struct in `pkg/config/config.go` (e.g., using `viper` for YAML/TOML parsing).
-        - [ ] Include parameters for:
+    - [x] **Define Core Message Structure:**
+        - [x] Design the canonical `PortaskMessage` struct in Go, including fields for ID, topic/queue, payload, headers, timestamp, etc.
+        - [x] Add `cbor` struct tags for efficient serialization.
+    - [x] **CBOR Serialization/Deserialization:**
+        - [x] Implement `EncodeCBOR(message PortaskMessage) ([]byte, error)` function.
+        - [x] Implement `DecodeCBOR([]byte) (PortaskMessage, error)` function.
+        - [x] Write unit tests for CBOR encoding/decoding.
+    - [x] **Zstd Compression/Decompression:**
+        - [x] Implement `CompressZstd(data []byte, level zstd.EncoderLevel) ([]byte, error)`.
+        - [x] Implement `DecompressZstd(compressedData []byte) ([]byte, error)`.
+        - [x] Implement logic for **single message compression**.
+        - [x] Implement logic for **bulk message compression** (batching multiple CBOR-encoded messages before Zstd compression).
+        - [x] Implement **length prefixing** for each compressed message/batch to enable stream parsing.
+        - [x] Write unit tests for Zstd compression/decompression.
+    - [x] **`Storage`&#32;Interface Design:**
+        - [x] Define `pkg/storage/storage.go` with an interface (e.g., `MessageStore`) for methods like `Store(msg PortaskMessage) error`, `Fetch(topic string, offset int) (PortaskMessage, error)`, `UpdateOffset(topic string, consumerID string, offset int) error`, etc.
+    - [x] **Dragonfly Adapter Implementation:**
+        - [x] Implement `pkg/storage/dragonfly.go` that satisfies the `MessageStore` interface.
+        - [x] Use `go-redis/redis` client library to interact with Dragonfly.
+        - [x] Map Portask concepts (topics, messages, offsets) to Redis data structures (e.g., Redis Streams, Lists, Hashes).
+        - [x] Implement basic error handling and connection management for Dragonfly.
+        - [x] Write unit tests for Dragonfly adapter (mocking Redis or using a test instance).
+    - [x] **Configuration System:**
+        - [x] Define a comprehensive `Config` struct in `pkg/config/config.go` (e.g., using `viper` for YAML/TOML parsing).
+        - [x] Include parameters for:
             - Network ports (Custom, Kafka, RabbitMQ).
             - Dragonfly connection details.
             - **Compression Strategy:** `single_message`, `bulk_batching`.
@@ -141,17 +141,17 @@ Portask will feature a layered architecture:
                 - `cpu_threshold_low_percent`: If CPU < this, increase compression level or switch to bulk.
                 - `memory_threshold_high_percent`: Similar for memory.
                 - `latency_threshold_high_ms`: If average message latency > this, prioritize speed over compression.
-        - [ ] Implement `LoadConfig(path string) (*Config, error)`.
-        - [ ] Implement a **dynamic adjustment manager** that monitors system metrics (CPU, Memory, Latency) and dynamically updates compression strategy/level based on configured ratios.
-    - [ ] **Custom Protocol Server:**
-        - [ ] Implement a `net.Listen` TCP server in `cmd/portask/main.go`.
-        - [ ] Handle incoming connections in goroutines.
-        - [ ] Implement basic custom protocol commands (e.g., `PUBLISH <topic> <payload>`, `SUBSCRIBE <topic>`, `ACK <messageID>`).
-        - [ ] Integrate with the Core Messaging Layer for message handling.
-        - [ ] Ensure internal messages are CBOR/Zstd compressed before storage and decompressed after retrieval.
-    - [ ] **Internal Message Bus/Queue:**
-        - [ ] Design and implement a simple in-memory message queue using Go channels for internal routing between protocol layers and the storage layer.
-        - [ ] Ensure this internal bus handles `PortaskMessage` structs, not raw bytes, allowing for consistent CBOR/Zstd handling.
+        - [x] Implement `LoadConfig(path string) (*Config, error)`.
+        - [x] Implement a **dynamic adjustment manager** that monitors system metrics (CPU, Memory, Latency) and dynamically updates compression strategy/level based on configured ratios.
+    - [x] **Custom Protocol Server:**
+        - [x] Implement a `net.Listen` TCP server in `cmd/portask/main.go`.
+        - [x] Handle incoming connections in goroutines.
+        - [x] Implement basic custom protocol commands (e.g., `PUBLISH <topic> <payload>`, `SUBSCRIBE <topic>`, `ACK <messageID>`).
+        - [x] Integrate with the Core Messaging Layer for message handling.
+        - [x] Ensure internal messages are CBOR/Zstd compressed before storage and decompressed after retrieval.
+    - [x] **Internal Message Bus/Queue:**
+        - [x] Design and implement a simple in-memory message queue using Go channels for internal routing between protocol layers and the storage layer.
+        - [x] Ensure this internal bus handles `PortaskMessage` structs, not raw bytes, allowing for consistent CBOR/Zstd handling.
 
 ### Phase 2: Kafka Protocol Emulation (6 Weeks)
 

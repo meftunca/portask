@@ -152,6 +152,10 @@ type Connection struct {
 	// Synchronization
 	writeMutex sync.Mutex
 	readMutex  sync.Mutex
+
+	// Subscription management
+	mu            sync.RWMutex
+	subscriptions map[string]bool
 }
 
 // NewTCPServer creates a new TCP server
@@ -171,8 +175,9 @@ func NewTCPServer(config *ServerConfig, handler ConnectionHandler) *TCPServer {
 	// Initialize connection pool
 	server.connPool.New = func() interface{} {
 		return &Connection{
-			readBuf:  make([]byte, config.ReadBufferSize),
-			writeBuf: make([]byte, config.WriteBufferSize),
+			readBuf:       make([]byte, config.ReadBufferSize),
+			writeBuf:      make([]byte, config.WriteBufferSize),
+			subscriptions: make(map[string]bool),
 		}
 	}
 
@@ -295,6 +300,9 @@ func (s *TCPServer) newConnection(conn net.Conn) *Connection {
 	connection.connectTime = time.Now()
 	connection.lastActive = time.Now()
 	atomic.StoreInt32(&connection.connected, 1)
+
+	// Initialize subscription map
+	connection.subscriptions = make(map[string]bool)
 
 	// Configure connection
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
@@ -442,6 +450,11 @@ func (c *Connection) reset() {
 	atomic.StoreInt64(&c.messagesIn, 0)
 	atomic.StoreInt64(&c.messagesOut, 0)
 	atomic.StoreInt64(&c.errors, 0)
+
+	// Clear subscriptions
+	c.mu.Lock()
+	c.subscriptions = make(map[string]bool)
+	c.mu.Unlock()
 }
 
 // generateConnectionID generates a unique connection ID

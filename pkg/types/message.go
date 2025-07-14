@@ -50,6 +50,8 @@ type PortaskMessage struct {
 	Status   MessageStatus   `cbor:"st,omitempty" json:"status,omitempty" msgpack:"st,omitempty"`
 
 	// Routing and delivery
+	Partition    int32     `cbor:"part,omitempty" json:"partition,omitempty" msgpack:"part,omitempty"`
+	Key          string    `cbor:"k,omitempty" json:"key,omitempty" msgpack:"k,omitempty"`
 	PartitionKey string    `cbor:"pk,omitempty" json:"partition_key,omitempty" msgpack:"pk,omitempty"`
 	ReplyTo      TopicName `cbor:"rt,omitempty" json:"reply_to,omitempty" msgpack:"rt,omitempty"`
 

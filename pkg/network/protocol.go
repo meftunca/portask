@@ -2,8 +2,11 @@ package network
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -244,34 +247,128 @@ func (h *PortaskProtocolHandler) validateChecksum(header *ProtocolHeader, payloa
 
 // handlePublish handles message publish requests
 func (h *PortaskProtocolHandler) handlePublish(ctx context.Context, conn *Connection, header *ProtocolHeader, payload []byte) error {
+	start := time.Now()
+	defer h.updateProcessTime(time.Since(start))
+
 	// Decompress if needed
 	if header.Flags&FlagCompressed != 0 {
-		// TODO: Implement decompression
+		decompressed, err := h.decompressPayload(payload)
+		if err != nil {
+			return fmt.Errorf("failed to decompress payload: %w", err)
+		}
+		payload = decompressed
 	}
 
 	// Deserialize message
 	message, err := h.codecManager.Decode(payload)
 	if err != nil {
+		atomic.AddInt64(&h.totalErrors, 1)
 		return fmt.Errorf("failed to deserialize message: %w", err)
 	}
 
-	// Handle the message
-	return h.OnMessage(conn, message)
+	// Store message in storage
+	if err := h.storage.Store(ctx, message); err != nil {
+		atomic.AddInt64(&h.totalErrors, 1)
+		return fmt.Errorf("failed to store message: %w", err)
+	}
+
+	atomic.AddInt64(&h.totalMessages, 1)
+	return h.sendResponse(conn, MessageTypeResponse, []byte("message_stored"))
 }
 
 // handleSubscribe handles subscription requests
 func (h *PortaskProtocolHandler) handleSubscribe(ctx context.Context, conn *Connection, header *ProtocolHeader, payload []byte) error {
-	// TODO: Implement subscription logic
-	// This would involve registering the connection for specific topics
-	return h.sendResponse(conn, MessageTypeResponse, []byte("subscribed"))
+	start := time.Now()
+	defer h.updateProcessTime(time.Since(start))
+
+	// Parse subscription request from payload
+	var subscribeRequest struct {
+		Topics []string `json:"topics"`
+		Offset int64    `json:"offset,omitempty"`
+	}
+
+	if err := json.Unmarshal(payload, &subscribeRequest); err != nil {
+		atomic.AddInt64(&h.totalErrors, 1)
+		return fmt.Errorf("failed to parse subscription request: %w", err)
+	}
+
+	// Register connection for topics
+	conn.mu.Lock()
+	if conn.subscriptions == nil {
+		conn.subscriptions = make(map[string]bool)
+	}
+	for _, topic := range subscribeRequest.Topics {
+		conn.subscriptions[topic] = true
+	}
+	conn.mu.Unlock()
+
+	atomic.AddInt64(&h.totalMessages, 1)
+
+	// Send subscription confirmation
+	response := map[string]interface{}{
+		"status":    "subscribed",
+		"topics":    subscribeRequest.Topics,
+		"timestamp": time.Now().UnixNano(),
+	}
+
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	return h.sendResponse(conn, MessageTypeResponse, responseBytes)
 }
 
 // handleFetch handles message fetch requests
-func (h *PortaskProtocolHandler) handleFetch(ctx context.Context, conn *Connection, header *ProtocolHeader, payload []byte) error {
-	// TODO: Parse fetch request (topic, partition, offset, limit)
-	// TODO: Fetch messages from storage
-	// TODO: Send response with messages
-	return h.sendResponse(conn, MessageTypeResponse, []byte("fetch_response"))
+func (h *PortaskProtocolHandler) handleFetch(ctx context.Context, conn *Connection, header *ProtocolHeader, payload []byte) error { // Decompress payload if needed
+	decompressedPayload, err := h.decompressPayload(payload)
+	if err != nil {
+		return fmt.Errorf("failed to decompress fetch payload: %w", err)
+	}
+
+	// Parse fetch request
+	var fetchRequest struct {
+		Topic     string `json:"topic"`
+		Partition int32  `json:"partition,omitempty"`
+		Offset    int64  `json:"offset,omitempty"`
+		Limit     int    `json:"limit,omitempty"`
+	}
+
+	if err := json.Unmarshal(decompressedPayload, &fetchRequest); err != nil {
+		return fmt.Errorf("failed to parse fetch request: %w", err)
+	}
+
+	// Set default limit if not specified
+	if fetchRequest.Limit <= 0 {
+		fetchRequest.Limit = 100
+	}
+
+	// Fetch messages from storage
+	messages, err := h.storage.Fetch(ctx, types.TopicName(fetchRequest.Topic), fetchRequest.Partition, fetchRequest.Offset, fetchRequest.Limit)
+	if err != nil {
+		// Send error response
+		errorResponse := map[string]interface{}{
+			"error": err.Error(),
+			"topic": fetchRequest.Topic,
+		}
+		responseData, _ := json.Marshal(errorResponse)
+		return h.sendResponse(conn, MessageTypeResponse, responseData)
+	}
+
+	// Prepare response
+	response := map[string]interface{}{
+		"topic":     fetchRequest.Topic,
+		"partition": fetchRequest.Partition,
+		"messages":  messages,
+		"count":     len(messages),
+	}
+
+	responseData, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fetch response: %w", err)
+	}
+
+	return h.sendResponse(conn, MessageTypeResponse, responseData)
 }
 
 // handleHeartbeat handles heartbeat messages
@@ -368,4 +465,39 @@ func calculateCRC32(data []byte) uint32 {
 func isRecoverableError(err error) bool {
 	// TODO: Implement proper error classification
 	return true
+}
+
+// decompressPayload decompresses message payload
+func (h *PortaskProtocolHandler) decompressPayload(payload []byte) ([]byte, error) {
+	// Simple GZIP decompression implementation
+	// In production, this could use the compression package
+	reader, err := gzip.NewReader(bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer reader.Close()
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, reader); err != nil {
+		return nil, fmt.Errorf("failed to decompress: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// compressPayload compresses message payload
+func (h *PortaskProtocolHandler) compressPayload(payload []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	writer := gzip.NewWriter(&buf)
+
+	if _, err := writer.Write(payload); err != nil {
+		writer.Close()
+		return nil, fmt.Errorf("failed to compress: %w", err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close compressor: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
