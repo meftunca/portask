@@ -137,7 +137,7 @@ func (h *KafkaProtocolHandler) handleMetadata(request *KafkaRequest) []byte {
 // handleProduce handles PRODUCE requests
 func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 	log.Printf("🔍 Handling Produce API request (API 0) - body size: %d bytes", len(request.Body))
-	
+
 	var buf bytes.Buffer
 
 	// Parse request

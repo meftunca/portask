@@ -747,22 +747,22 @@ func (s *InMemoryMessageStore) ConsumeMessages(topic string, partition int32, of
 func (s *InMemoryMessageStore) GetTopicMetadata(topics []string) (*TopicMetadata, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	
+
 	// If no topics specified, return empty response
 	if len(topics) == 0 {
 		return nil, fmt.Errorf("no topics requested")
 	}
-	
+
 	topicName := topics[0]
 	t, exists := s.topics[topicName]
-	
+
 	// Auto-create topic if it doesn't exist (common in Kafka)
 	if !exists {
 		log.Printf("🔄 Auto-creating topic: %s", topicName)
 		// Unlock RLock and acquire write lock for creation
 		s.mutex.RUnlock()
 		s.mutex.Lock()
-		
+
 		// Check again after acquiring write lock
 		t, exists = s.topics[topicName]
 		if !exists {
@@ -776,24 +776,25 @@ func (s *InMemoryMessageStore) GetTopicMetadata(topics []string) (*TopicMetadata
 			s.topics[topicName] = t
 			log.Printf("✅ Auto-created topic: %s with 1 partition", topicName)
 		}
-		
+
 		s.mutex.Unlock()
 		s.mutex.RLock() // Re-acquire read lock for consistency
 	}
-	
+
 	partitions := []PartitionMetadata{}
 	for pid := range t.Partitions {
 		partitions = append(partitions, PartitionMetadata{
-			ID:       pid, 
-			Leader:   1, 
-			Replicas: []int32{1}, 
+			ID:       pid,
+			Leader:   1,
+			Replicas: []int32{1},
 			ISR:      []int32{1},
+			Error:    0, // No error
 		})
 	}
-	
+
 	return &TopicMetadata{
-		Name:       t.Name, 
-		Partitions: partitions, 
+		Name:       t.Name,
+		Partitions: partitions,
 		Error:      0,
 	}, nil
 }
