@@ -1,0 +1,19 @@
+apiVersion: v2
+name: portask
+version: 1.0.0
+kubeVersion: ">=1.24.0"
+description: Production-ready Portask Helm chart for Kubernetes
+keywords:
+  - portask
+  - messaging
+  - queue
+  - high-availability
+  - scalable
+home: https://github.com/meftunca/portask
+dependencies: []
+maintainers:
+  - name: meftunca
+    email: info@portask.io
+sources:
+  - https://github.com/meftunca/portask
+icon: https://raw.githubusercontent.com/meftunca/portask/main/docs/logo.png

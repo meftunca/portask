@@ -391,6 +391,28 @@ func TestLockFreeQueue_Statistics(t *testing.T) {
 	t.Logf("Queue after dequeue: operations completed successfully")
 }
 
+// Queue push/pop işlemi için benchmark
+func BenchmarkQueuePushPop(b *testing.B) {
+	q := NewLockFreeQueue("bench", 1000000, 0)
+	msg := &types.PortaskMessage{ID: "bench"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		q.Enqueue(msg)
+		q.Dequeue()
+	}
+}
+
+func BenchmarkQueueParallelPush(b *testing.B) {
+	q := NewLockFreeQueue("bench", 100000, 0)
+	msg := &types.PortaskMessage{ID: "bench"}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			q.Enqueue(msg)
+			q.Dequeue()
+		}
+	})
+}
+
 // Helper functions
 
 func createTestMessageBus(tb testing.TB) *MessageBus {
@@ -433,5 +455,25 @@ func createTestMessage(id string, payload []byte) *types.PortaskMessage {
 		Timestamp: time.Now().Unix(),
 		Payload:   payload,
 		Headers:   types.MessageHeaders{},
+	}
+}
+
+// TestMessageBus_MemoryLimit gibi bir testte, queue full olduğunda kalan mesaj sayısını logla
+func TestQueueMemoryLimit(t *testing.T) {
+	q := NewLockFreeQueue("bench", 100, 0)
+	msg := &types.PortaskMessage{ID: "bench"}
+	count := 0
+	for i := 0; i < 1000; i++ {
+		if q.Enqueue(msg) {
+			count++
+		} else {
+			// Kuyruk doldu
+			break
+		}
+	}
+	remaining := q.Size()
+	t.Logf("Queue full! Enqueued: %d, Remaining in queue: %d", count, remaining)
+	if remaining == 0 {
+		t.Error("Queue should have some messages after full!")
 	}
 }

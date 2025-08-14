@@ -72,15 +72,13 @@ func NewKafkaPortaskBridge(config *KafkaIntegrationConfig, portaskAddr string, t
 
 // --- Sarama implementation ---
 type SaramaKafkaBridge struct {
-	producer     sarama.SyncProducer
-	consumer     sarama.ConsumerGroup
-	portaskConn  net.Conn
-	config       *KafkaIntegrationConfig
-	messageCount int64
-	errorCount   int64
-	isRunning    bool
-	stopChan     chan struct{}
-	mu           sync.RWMutex
+	producer    sarama.SyncProducer
+	consumer    sarama.ConsumerGroup
+	portaskConn net.Conn
+	config      *KafkaIntegrationConfig
+	isRunning   bool
+	stopChan    chan struct{}
+	mu          sync.RWMutex
 	// ...
 }
 
@@ -192,15 +190,13 @@ func (b *SaramaKafkaBridge) Stop() error {
 
 // --- kafka-go implementation ---
 type KafkaGoBridge struct {
-	writer       *kafka.Writer
-	reader       *kafka.Reader
-	portaskConn  net.Conn
-	config       *KafkaIntegrationConfig
-	messageCount int64
-	errorCount   int64
-	isRunning    bool
-	stopChan     chan struct{}
-	mu           sync.RWMutex
+	writer      *kafka.Writer
+	reader      *kafka.Reader
+	portaskConn net.Conn
+	config      *KafkaIntegrationConfig
+	isRunning   bool
+	stopChan    chan struct{}
+	mu          sync.RWMutex
 	// ...
 }
 
@@ -309,7 +305,17 @@ func (b *KafkaPortaskBridge) PublishToKafka(topic string, key string, message []
 }
 
 func (b *KafkaPortaskBridge) ForwardFromKafkaToPortask(topics []string) error {
-	// This would start consuming from topics and forward to Portask
-	// For now, return a placeholder implementation
-	return nil
+	// Production-grade: Start consuming and forward to Portask
+	switch b.clientType {
+	case KafkaClientSarama:
+		return b.saramaBridge.ConsumeFromKafka(topics)
+	case KafkaClientKafkaGo:
+		return b.kafkaGoBridge.ConsumeFromKafka()
+	default:
+		return fmt.Errorf("unknown client type: %s", b.clientType)
+	}
 }
+
+// Edge-case support: Kafka header mapping, partition, offset, batch, priority, encryption
+// SaramaKafkaBridge: PublishToKafka, ConsumeFromKafka, SendToPortask fonksiyonlarında header, partition, offset, batch, priority, encryption desteği eklenmeli
+// KafkaGoBridge: PublishToKafka, ConsumeFromKafka, SendToPortask fonksiyonlarında header, partition, offset, batch, priority, encryption desteği eklenmeli

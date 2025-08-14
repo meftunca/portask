@@ -260,7 +260,6 @@ func (s *EnhancedAMQPServer) handleMethodFrameWithChannel(conn net.Conn, channel
 		log.Printf("[AMQP] Unknown method frame: classID=%d methodID=%d channel=%d", classID, methodID, channelID)
 		return nil
 	}
-	return nil
 }
 
 func (s *EnhancedAMQPServer) handleQueueDeclare(channelID int, name string, durable, autoDelete bool) error {

@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"encoding/json"
+
 	"github.com/meftunca/portask/pkg/types"
 )
 
@@ -24,15 +26,16 @@ func NewJSONSerializer() *JSONSerializer {
 }
 
 func (j *JSONSerializer) Serialize(message *types.PortaskMessage) ([]byte, error) {
-	// Implementation would use encoding/json
-	// For now, placeholder
-	return []byte("json_placeholder"), nil
+	return json.Marshal(message)
 }
 
 func (j *JSONSerializer) Deserialize(data []byte) (*types.PortaskMessage, error) {
-	// Implementation would use encoding/json
-	// For now, placeholder
-	return &types.PortaskMessage{}, nil
+	var message types.PortaskMessage
+	err := json.Unmarshal(data, &message)
+	if err != nil {
+		return nil, err
+	}
+	return &message, nil
 }
 
 // NoOpCompressor implements Compressor with no compression

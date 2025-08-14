@@ -24,6 +24,9 @@ type MessageProcessor struct {
 	metrics         *ProcessorMetrics
 	running         int32
 	mu              sync.RWMutex
+	events          []ProcessorEvent
+	eventsMu        sync.Mutex
+	workerHealth    map[int]*WorkerHealth
 }
 
 // ProcessorConfig configures the message processor
@@ -91,6 +94,24 @@ const (
 	ProcessTypeCompress
 	ProcessTypeDecompress
 )
+
+// ProcessorEvent represents a diagnostic or lifecycle event in the processor
+// Type: "worker_start", "worker_stop", "panic", "error", "batch", "backpressure", "custom"
+type ProcessorEvent struct {
+	Time     time.Time
+	Type     string
+	WorkerID int
+	Message  string
+	TaskID   uint64
+	Error    error
+}
+
+// WorkerHealth holds health and last error for a worker
+type WorkerHealth struct {
+	LastError error
+	Healthy   bool
+	LastEvent time.Time
+}
 
 // NewMessageProcessor creates a new high-performance message processor
 func NewMessageProcessor(config *ProcessorConfig) *MessageProcessor {
@@ -251,14 +272,32 @@ func NewWorker(id int, processor *MessageProcessor) *Worker {
 
 // Run runs the worker loop
 func (w *Worker) Run(ctx context.Context) {
+	w.processor.AddEvent(ProcessorEvent{
+		Time:     time.Now(),
+		Type:     "worker_start",
+		WorkerID: w.id,
+		Message:  "Worker started",
+	})
 	for {
 		select {
 		case task := <-w.processor.processingQueue:
 			if task == nil {
+				w.processor.AddEvent(ProcessorEvent{
+					Time:     time.Now(),
+					Type:     "worker_stop",
+					WorkerID: w.id,
+					Message:  "Worker stopped (queue closed)",
+				})
 				return // Channel closed
 			}
 			w.processTask(task)
 		case <-ctx.Done():
+			w.processor.AddEvent(ProcessorEvent{
+				Time:     time.Now(),
+				Type:     "worker_stop",
+				WorkerID: w.id,
+				Message:  "Worker stopped (context cancelled)",
+			})
 			return
 		}
 	}
@@ -268,6 +307,14 @@ func (w *Worker) Run(ctx context.Context) {
 func (w *Worker) processTask(task *ProcessTask) {
 	defer func() {
 		if r := recover(); r != nil {
+			w.processor.AddEvent(ProcessorEvent{
+				Time:     time.Now(),
+				Type:     "panic",
+				WorkerID: w.id,
+				TaskID:   task.ID,
+				Message:  "Worker panic",
+				Error:    ErrProcessingPanic,
+			})
 			result := &ProcessResult{
 				TaskID:  task.ID,
 				Success: false,
@@ -692,6 +739,53 @@ func (mp *MessageProcessor) updateMetrics(result *ProcessResult) {
 	if result.Compressed {
 		mp.metrics.CompressedMessages++
 	}
+}
+
+// AddEvent logs a processor event
+func (mp *MessageProcessor) AddEvent(ev ProcessorEvent) {
+	mp.eventsMu.Lock()
+	if len(mp.events) > 200 {
+		mp.events = mp.events[1:]
+	}
+	mp.events = append(mp.events, ev)
+	mp.eventsMu.Unlock()
+	if ev.WorkerID >= 0 {
+		if mp.workerHealth == nil {
+			mp.workerHealth = make(map[int]*WorkerHealth)
+		}
+		h := mp.workerHealth[ev.WorkerID]
+		if h == nil {
+			h = &WorkerHealth{}
+			mp.workerHealth[ev.WorkerID] = h
+		}
+		h.LastEvent = ev.Time
+		if ev.Type == "panic" || ev.Type == "error" {
+			h.LastError = ev.Error
+			h.Healthy = false
+		} else if ev.Type == "worker_start" {
+			h.Healthy = true
+		}
+	}
+}
+
+// GetEvents returns recent processor events
+func (mp *MessageProcessor) GetEvents() []ProcessorEvent {
+	mp.eventsMu.Lock()
+	defer mp.eventsMu.Unlock()
+	return append([]ProcessorEvent(nil), mp.events...)
+}
+
+// GetWorkerHealth returns health info for all workers
+func (mp *MessageProcessor) GetWorkerHealth() map[int]WorkerHealth {
+	mp.eventsMu.Lock()
+	defer mp.eventsMu.Unlock()
+	result := make(map[int]WorkerHealth)
+	for id, h := range mp.workerHealth {
+		if h != nil {
+			result[id] = *h
+		}
+	}
+	return result
 }
 
 // SIMD-optimized CRC32 (placeholder - would use actual SIMD instructions)

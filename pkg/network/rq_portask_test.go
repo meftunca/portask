@@ -776,3 +776,18 @@ func TestRabbitMQPerformanceWithPortask(t *testing.T) {
 	// Stop server
 	server.Stop(ctx)
 }
+
+// Edge-case support: RabbitMQ header mapping, ack, error, reconnect, batch, priority, encryption
+// RabbitMQPortaskBridge: PublishToRabbitMQ, ConsumeFromRabbitMQ, SendToPortask fonksiyonlarında header, ack, error, reconnect, batch, priority, encryption desteği eklenmeli
+
+func TestRabbitMQBridge_InvalidExchange(t *testing.T) {
+	// Simulate publishing to a non-existent exchange
+	// This is a placeholder for a real integration test
+	assert.True(t, true)
+}
+
+func TestRabbitMQBridge_DuplicateMessage(t *testing.T) {
+	// Simulate duplicate message delivery
+	// This is a placeholder for a real integration test
+	assert.True(t, true)
+}

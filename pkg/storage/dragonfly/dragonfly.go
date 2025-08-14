@@ -15,6 +15,14 @@ import (
 	"github.com/meftunca/portask/pkg/types"
 )
 
+// Local pools for zero-alloc fast paths
+var (
+	// Reusable PortaskMessage instances
+	messagePool = sync.Pool{New: func() interface{} { return new(types.PortaskMessage) }}
+	// Reusable *[]string slices to avoid allocations
+	stringSlicePool = sync.Pool{New: func() interface{} { s := make([]string, 0, 64); return &s }}
+)
+
 // DragonflyStore implements MessageStore interface for Dragonfly
 type DragonflyStore struct {
 	client     redis.UniversalClient
@@ -42,20 +50,20 @@ func NewDragonflyStore(config *storage.DragonflyConfig) (*DragonflyStore, error)
 	var client redis.UniversalClient
 
 	if config.EnableCluster && len(config.Addresses) > 1 {
-		// Cluster mode
+		// Cluster mode with OPTIMIZED settings for stability + performance
 		client = redis.NewClusterClient(&redis.ClusterOptions{
 			Addrs:        config.Addresses,
 			Username:     config.Username,
 			Password:     config.Password,
-			DialTimeout:  10 * time.Second,
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 5 * time.Second,
-			PoolSize:     100,
-			MinIdleConns: 10,
-			PoolTimeout:  time.Minute,
+			DialTimeout:  2 * time.Second, // More tolerant for CI
+			ReadTimeout:  2 * time.Second,
+			WriteTimeout: 2 * time.Second,
+			PoolSize:     1000, // High performance pool
+			MinIdleConns: 200,  // Keep many warm connections
+			PoolTimeout:  10 * time.Second,
 		})
 	} else {
-		// Single instance or failover mode
+		// Single instance with OPTIMIZED settings for stability + performance
 		var addresses []string
 		if len(config.Addresses) == 0 {
 			addresses = []string{"localhost:6379"}
@@ -68,12 +76,13 @@ func NewDragonflyStore(config *storage.DragonflyConfig) (*DragonflyStore, error)
 			Username:     config.Username,
 			Password:     config.Password,
 			DB:           config.DB,
-			DialTimeout:  10 * time.Second,
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 5 * time.Second,
-			PoolSize:     100,
-			MinIdleConns: 10,
-			PoolTimeout:  time.Minute,
+			DialTimeout:  2 * time.Second,
+			ReadTimeout:  2 * time.Second,
+			WriteTimeout: 2 * time.Second,
+			PoolSize:     1000, // High performance pool
+			MinIdleConns: 200,  // Keep many warm connections
+			PoolTimeout:  10 * time.Second,
+			MaxRetries:   3,
 		})
 	}
 
@@ -114,8 +123,17 @@ func (d *DragonflyStore) Connect(ctx context.Context) error {
 	d.connMutex.Lock()
 	defer d.connMutex.Unlock()
 
-	// Test connection
-	if err := d.client.Ping(ctx).Err(); err != nil {
+	// Test connection with a brief retry loop to tolerate slow CI starts
+	var err error
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		err = d.client.Ping(ctx).Err()
+		if err == nil || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err != nil {
 		d.metrics.Status = "unhealthy"
 		return fmt.Errorf("failed to connect to Dragonfly: %w", err)
 	}
@@ -159,7 +177,7 @@ func (d *DragonflyStore) Ping(ctx context.Context) error {
 	return nil
 }
 
-// Store saves a single message
+// Store saves a single message (OPTIMIZED but COMPATIBLE)
 func (d *DragonflyStore) Store(ctx context.Context, message *types.PortaskMessage) error {
 	start := time.Now()
 	defer func() {
@@ -167,15 +185,15 @@ func (d *DragonflyStore) Store(ctx context.Context, message *types.PortaskMessag
 		d.metrics.TotalOperations++
 	}()
 
-	// Serialize message
+	// Always serialize for compatibility - but optimized
 	data, err := d.serializer.Serialize(message)
 	if err != nil {
 		d.metrics.FailedOperations++
 		return fmt.Errorf("serialization failed: %w", err)
 	}
 
-	// Compress if enabled
-	if d.config.EnableCompression {
+	// Skip compression for small messages for speed
+	if d.config.EnableCompression && len(data) > 1024 {
 		data, err = d.compressor.Compress(data)
 		if err != nil {
 			d.metrics.FailedOperations++
@@ -183,10 +201,10 @@ func (d *DragonflyStore) Store(ctx context.Context, message *types.PortaskMessag
 		}
 	}
 
-	// Store in Dragonfly
+	// Ultra-fast key generation
 	key := d.messagePrefix + string(message.ID)
 
-	// Set with TTL if specified
+	// Set with minimal TTL overhead
 	var ttl time.Duration
 	if message.TTL > 0 {
 		ttl = time.Duration(message.TTL) * time.Second
@@ -198,6 +216,17 @@ func (d *DragonflyStore) Store(ctx context.Context, message *types.PortaskMessag
 		return fmt.Errorf("store failed: %w", err)
 	}
 
+	// Also append to a stream for ordered reads (integrated optimization)
+	streamKey := fmt.Sprintf("%s:stream:%s:%d", d.config.KeyPrefix, message.Topic, message.Partition)
+	_ = d.client.XAdd(ctx, &redis.XAddArgs{
+		Stream: streamKey,
+		Values: map[string]interface{}{
+			"id":        string(message.ID),
+			"data":      string(data),
+			"timestamp": message.Timestamp,
+		},
+	}).Err()
+
 	// Update topic message count
 	topicCountKey := d.topicPrefix + string(message.Topic) + ":count"
 	d.client.Incr(ctx, topicCountKey)
@@ -206,7 +235,7 @@ func (d *DragonflyStore) Store(ctx context.Context, message *types.PortaskMessag
 	return nil
 }
 
-// StoreBatch saves multiple messages in a single operation
+// StoreBatch saves multiple messages in a single operation (OPTIMIZED but COMPATIBLE)
 func (d *DragonflyStore) StoreBatch(ctx context.Context, batch *types.MessageBatch) error {
 	start := time.Now()
 	defer func() {
@@ -214,18 +243,19 @@ func (d *DragonflyStore) StoreBatch(ctx context.Context, batch *types.MessageBat
 		d.metrics.TotalOperations++
 	}()
 
+	// Single mega-pipeline for maximum throughput
 	pipe := d.client.Pipeline()
 
 	for _, message := range batch.Messages {
-		// Serialize message
+		// Always serialize for compatibility
 		data, err := d.serializer.Serialize(message)
 		if err != nil {
 			d.metrics.FailedOperations++
 			return fmt.Errorf("serialization failed for message %s: %w", message.ID, err)
 		}
 
-		// Compress if enabled
-		if d.config.EnableCompression {
+		// Compress only large messages for speed
+		if d.config.EnableCompression && len(data) > 1024 {
 			data, err = d.compressor.Compress(data)
 			if err != nil {
 				d.metrics.FailedOperations++
@@ -233,8 +263,10 @@ func (d *DragonflyStore) StoreBatch(ctx context.Context, batch *types.MessageBat
 			}
 		}
 
-		// Add to pipeline
+		// Ultra-fast key generation
 		key := d.messagePrefix + string(message.ID)
+
+		// Add to pipeline with TTL if specified
 		var ttl time.Duration
 		if message.TTL > 0 {
 			ttl = time.Duration(message.TTL) * time.Second
@@ -242,7 +274,18 @@ func (d *DragonflyStore) StoreBatch(ctx context.Context, batch *types.MessageBat
 
 		pipe.Set(ctx, key, data, ttl)
 
-		// Update topic message count
+		// Add to stream too (integrated optimization)
+		streamKey := fmt.Sprintf("%s:stream:%s:%d", d.config.KeyPrefix, message.Topic, message.Partition)
+		pipe.XAdd(ctx, &redis.XAddArgs{
+			Stream: streamKey,
+			Values: map[string]interface{}{
+				"id":        string(message.ID),
+				"data":      string(data),
+				"timestamp": message.Timestamp,
+			},
+		})
+
+		// Re-enable topic counting for compatibility
 		topicCountKey := d.topicPrefix + string(message.Topic) + ":count"
 		pipe.Incr(ctx, topicCountKey)
 	}
@@ -258,83 +301,104 @@ func (d *DragonflyStore) StoreBatch(ctx context.Context, batch *types.MessageBat
 	return nil
 }
 
-// Fetch retrieves messages from a topic partition
+// Fetch retrieves messages from a topic partition (FIXED OPTIMIZED version)
 func (ds *DragonflyStore) Fetch(ctx context.Context, topic types.TopicName, partition int32, offset int64, limit int) ([]*types.PortaskMessage, error) {
 	start := time.Now()
 	defer func() {
 		ds.updateResponseTime(time.Since(start))
 	}()
 
-	// For simplicity, we'll implement a basic key-based approach
-	// In production, you'd want to use Redis Streams or sorted sets for better performance
-
-	// Create pattern to match messages for this topic/partition
-	pattern := ds.messagePrefix + string(topic) + ":" + strconv.Itoa(int(partition)) + ":*"
-
-	// Get all keys matching the pattern
-	keys, err := ds.client.Keys(ctx, pattern).Result()
-	if err != nil {
-		ds.metrics.FailedOperations++
-		return nil, fmt.Errorf("failed to get message keys: %w", err)
+	if limit <= 0 {
+		return []*types.PortaskMessage{}, nil
 	}
 
-	// Sort keys to maintain order (simple approach - in production use better ordering)
-	// For now, we'll assume the key format includes a sortable timestamp or offset
+	messages := make([]*types.PortaskMessage, 0, limit)
 
-	// Limit the keys if needed
-	if limit > 0 && len(keys) > limit {
-		keys = keys[:limit]
-	}
+	// Optimized SCAN with reasonable batches
+	pattern := ds.messagePrefix + "*"
+	var cursor uint64
+	const batchSize = 2000 // Reasonable batch size
 
-	messages := make([]*types.PortaskMessage, 0, len(keys))
-
-	// Fetch messages in batch
-	if len(keys) == 0 {
-		ds.metrics.SuccessfulOperations++
-		return messages, nil
-	}
-
-	// Use pipeline for better performance
-	pipe := ds.client.Pipeline()
-	cmds := make([]*redis.StringCmd, len(keys))
-
-	for i, key := range keys {
-		cmds[i] = pipe.Get(ctx, key)
-	}
-
-	_, err = pipe.Exec(ctx)
-	if err != nil && err != redis.Nil {
-		ds.metrics.FailedOperations++
-		return nil, fmt.Errorf("failed to fetch messages: %w", err)
-	}
-
-	// Process results
-	for _, cmd := range cmds {
-		data, err := cmd.Bytes()
+	for len(messages) < limit {
+		// Scan with reasonable batches
+		keys, nextCursor, err := ds.client.Scan(ctx, cursor, pattern, batchSize).Result()
 		if err != nil {
-			continue // Skip failed messages
+			ds.metrics.FailedOperations++
+			return nil, fmt.Errorf("failed to scan message keys: %w", err)
 		}
 
-		// Decompress if enabled
-		if ds.compressor != nil {
-			data, err = ds.compressor.Decompress(data)
-			if err != nil {
-				continue // Skip corrupted messages
+		if len(keys) == 0 {
+			break
+		}
+
+		// Process keys in reasonable chunks
+		const chunkSize = 500
+		for i := 0; i < len(keys); i += chunkSize {
+			if len(messages) >= limit {
+				break
+			}
+
+			end := i + chunkSize
+			if end > len(keys) {
+				end = len(keys)
+			}
+			chunk := keys[i:end]
+
+			// Pipeline for this chunk
+			pipe := ds.client.Pipeline()
+			cmds := make([]*redis.StringCmd, len(chunk))
+
+			for j, key := range chunk {
+				cmds[j] = pipe.Get(ctx, key)
+			}
+
+			_, err = pipe.Exec(ctx)
+			if err != nil && err != redis.Nil {
+				continue // Skip this chunk, don't fail entire operation
+			}
+
+			// Process results
+			for _, cmd := range cmds {
+				if len(messages) >= limit {
+					break
+				}
+
+				data, err := cmd.Bytes()
+				if err == redis.Nil {
+					continue
+				}
+				if err != nil {
+					continue
+				}
+
+				// Decompress if enabled
+				if ds.config.EnableCompression {
+					data, err = ds.compressor.Decompress(data)
+					if err != nil {
+						continue
+					}
+				}
+
+				// Deserialize
+				message, err := ds.serializer.Deserialize(data)
+				if err != nil {
+					continue
+				}
+
+				// Filter and add
+				if message.Topic == topic && (partition < 0 || message.Partition == partition) && message.Offset >= offset {
+					messages = append(messages, message)
+				}
 			}
 		}
 
-		// Deserialize message
-		message, err := ds.serializer.Deserialize(data)
-		if err != nil {
-			continue // Skip corrupted messages
+		cursor = nextCursor
+		if cursor == 0 {
+			break
 		}
-
-		messages = append(messages, message)
 	}
 
 	ds.metrics.SuccessfulOperations++
-	ds.metrics.TotalOperations++
-
 	return messages, nil
 }
 
@@ -398,7 +462,7 @@ func (d *DragonflyStore) Delete(ctx context.Context, messageID types.MessageID) 
 	return nil
 }
 
-// DeleteBatch removes multiple messages
+// DeleteBatch removes multiple messages (OPTIMIZED FIXED version)
 func (d *DragonflyStore) DeleteBatch(ctx context.Context, messageIDs []types.MessageID) error {
 	start := time.Now()
 	defer func() {
@@ -406,15 +470,63 @@ func (d *DragonflyStore) DeleteBatch(ctx context.Context, messageIDs []types.Mes
 		d.metrics.TotalOperations++
 	}()
 
+	if len(messageIDs) == 0 {
+		return nil
+	}
+
+	// Optimized: Reasonable batch size and concurrency
+	const maxKeysPerBatch = 1000    // Reasonable batch size
+	const maxConcurrentBatches = 10 // Limited concurrency
+
+	// Pre-build all keys
 	keys := make([]string, len(messageIDs))
 	for i, id := range messageIDs {
 		keys[i] = d.messagePrefix + string(id)
 	}
 
-	err := d.client.Del(ctx, keys...).Err()
-	if err != nil {
-		d.metrics.FailedOperations++
-		return fmt.Errorf("batch delete failed: %w", err)
+	// Process in batches with limited concurrency
+	var wg sync.WaitGroup
+	errorChan := make(chan error, maxConcurrentBatches)
+	semaphore := make(chan struct{}, maxConcurrentBatches)
+
+	for i := 0; i < len(keys); i += maxKeysPerBatch {
+		end := i + maxKeysPerBatch
+		if end > len(keys) {
+			end = len(keys)
+		}
+
+		batch := keys[i:end]
+
+		wg.Add(1)
+		go func(keysToDelete []string) {
+			defer wg.Done()
+
+			// Acquire semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// Delete batch
+			err := d.client.Del(ctx, keysToDelete...).Err()
+			if err != nil {
+				select {
+				case errorChan <- err:
+				default:
+				}
+			}
+		}(batch)
+	}
+
+	wg.Wait()
+	close(errorChan)
+
+	// Check for errors
+	select {
+	case err := <-errorChan:
+		if err != nil {
+			d.metrics.FailedOperations++
+			return fmt.Errorf("batch delete failed: %w", err)
+		}
+	default:
 	}
 
 	d.metrics.SuccessfulOperations++
@@ -660,26 +772,39 @@ func (ds *DragonflyStore) GetTopicInfo(ctx context.Context, topic types.TopicNam
 	return &topicInfo, nil
 }
 
-// ListTopics lists all topics
+// ListTopics lists all topics (FIXED SIMPLE version)
 func (ds *DragonflyStore) ListTopics(ctx context.Context) ([]*types.TopicInfo, error) {
+	start := time.Now()
+	defer func() {
+		ds.updateResponseTime(time.Since(start))
+	}()
+
+	// Get all topic keys in one shot
 	pattern := ds.topicPrefix + "*"
 	keys, err := ds.client.Keys(ctx, pattern).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list topics: %w", err)
 	}
 
+	if len(keys) == 0 {
+		return []*types.TopicInfo{}, nil
+	}
+
+	// Simple sequential processing to avoid goroutine issues
 	topics := make([]*types.TopicInfo, 0, len(keys))
 
 	for _, key := range keys {
-		// Extract topic name from key
-		topicName := strings.TrimPrefix(key, ds.topicPrefix)
-
-		topicInfo, err := ds.GetTopicInfo(ctx, types.TopicName(topicName))
+		data, err := ds.client.Get(ctx, key).Bytes()
 		if err != nil {
+			continue // Skip failed topics
+		}
+
+		var topicInfo types.TopicInfo
+		if err := json.Unmarshal(data, &topicInfo); err != nil {
 			continue // Skip invalid topics
 		}
 
-		topics = append(topics, topicInfo)
+		topics = append(topics, &topicInfo)
 	}
 
 	return topics, nil
@@ -756,6 +881,165 @@ func (ds *DragonflyStore) GetEarliestOffset(ctx context.Context, topic types.Top
 	return 0, nil
 }
 
+// ========== ULTRA PERFORMANCE METHODS ==========
+
+// UltraFastStore - Zero allocation store operation targeting 100k+ ops/s
+func (ds *DragonflyStore) UltraFastStore(ctx context.Context, message *types.PortaskMessage) error {
+	// Ultra-fast key generation
+	key := ds.messagePrefix + string(message.ID)
+
+	// Use payload directly for maximum speed
+	var data []byte
+	if message.Payload != nil {
+		data = message.Payload
+	} else {
+		// Fallback serialization
+		var err error
+		data, err = ds.serializer.Serialize(message)
+		if err != nil {
+			return fmt.Errorf("serialization failed: %w", err)
+		}
+	}
+
+	// Direct store without TTL overhead
+	return ds.client.Set(ctx, key, data, 0).Err()
+}
+
+// UltraFastBatchStore - Batch operations with minimal overhead
+func (ds *DragonflyStore) UltraFastBatchStore(ctx context.Context, messages []*types.PortaskMessage) error {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	// Single mega-pipeline for maximum throughput
+	pipe := ds.client.Pipeline()
+
+	for _, msg := range messages {
+		key := ds.messagePrefix + string(msg.ID)
+		var data []byte
+		if msg.Payload != nil {
+			data = msg.Payload
+		} else {
+			// Fallback serialization
+			var err error
+			data, err = ds.serializer.Serialize(msg)
+			if err != nil {
+				continue // Skip failed messages
+			}
+		}
+		pipe.Set(ctx, key, data, 0)
+	}
+
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// ZeroAllocFetch - Memory pool based fetch for ultra performance
+func (ds *DragonflyStore) ZeroAllocFetch(ctx context.Context, topic types.TopicName, limit int) ([]*types.PortaskMessage, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+
+	// Single SCAN operation with optimized batch
+	pattern := ds.messagePrefix + "*"
+	keys, _, err := ds.client.Scan(ctx, 0, pattern, int64(limit*2)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) == 0 {
+		return []*types.PortaskMessage{}, nil
+	}
+
+	// Limit keys to requested amount
+	if len(keys) > limit {
+		keys = keys[:limit]
+	}
+
+	// Single MGET for all keys
+	values, err := ds.client.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	// Fast processing without full deserialization for filtering
+	messages := make([]*types.PortaskMessage, 0, limit)
+	for i, val := range values {
+		if val == nil {
+			continue
+		}
+
+		// Get message from pool
+		msg := messagePool.Get().(*types.PortaskMessage)
+
+		// Extract ID from key (ultra fast)
+		keyStr := keys[i]
+		msg.ID = types.MessageID(keyStr[len(ds.messagePrefix):])
+		msg.Topic = topic
+
+		// Store payload directly
+		if valStr, ok := val.(string); ok {
+			msg.Payload = []byte(valStr)
+		}
+
+		messages = append(messages, msg)
+
+		if len(messages) >= limit {
+			break
+		}
+	}
+
+	return messages, nil
+}
+
+// TurboDelete - Fastest possible delete operation
+func (ds *DragonflyStore) TurboDelete(ctx context.Context, messageID types.MessageID) error {
+	key := ds.messagePrefix + string(messageID)
+	return ds.client.Del(ctx, key).Err()
+}
+
+// MegaBatchDelete - Ultra-fast batch deletion
+func (ds *DragonflyStore) MegaBatchDelete(ctx context.Context, messageIDs []types.MessageID) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+
+	// Convert to keys efficiently using pool
+	keysPtr := stringSlicePool.Get().(*[]string)
+	// Work on a local copy to avoid races
+	keys := (*keysPtr)[:0]
+
+	for _, id := range messageIDs {
+		keys = append(keys, ds.messagePrefix+string(id))
+	}
+
+	// Single DEL command for maximum performance
+	err := ds.client.Del(ctx, keys...).Err()
+	// Reset and put back to pool
+	*keysPtr = keys[:0]
+	stringSlicePool.Put(keysPtr)
+	return err
+}
+
+// RecycleMessage - Memory recycling for continuous high performance
+func (ds *DragonflyStore) RecycleMessage(msg *types.PortaskMessage) {
+	if msg == nil {
+		return
+	}
+
+	// Reset message fields
+	msg.ID = ""
+	msg.Topic = ""
+	msg.Payload = nil
+	msg.Timestamp = 0
+	msg.Partition = 0
+	msg.Offset = 0
+	msg.TTL = 0
+
+	// Return to pool
+	messagePool.Put(msg)
+}
+
 // Helper methods
 
 // updateResponseTime updates average response time metrics
@@ -800,14 +1084,90 @@ func (d *DragonflyStore) Stats(ctx context.Context) (*storage.StorageStats, erro
 	return &stats, nil
 }
 
-// Cleanup performs cleanup operations based on retention policy
+// Cleanup performs cleanup operations (FIXED STABLE version)
 func (ds *DragonflyStore) Cleanup(ctx context.Context, retentionPolicy *storage.RetentionPolicy) error {
-	// TODO: Implement message cleanup based on retention policy
-	// This would involve:
-	// 1. Finding expired messages
-	// 2. Cleaning up old consumer offsets
-	// 3. Removing unused topics
-	// 4. Compacting message history
+	start := time.Now()
+	defer func() {
+		ds.updateResponseTime(time.Since(start))
+		ds.metrics.TotalOperations++
+	}()
 
-	return fmt.Errorf("cleanup not yet implemented")
+	if retentionPolicy == nil {
+		return nil
+	}
+
+	// Simple cleanup with reasonable batching
+	const batchSize = 1000
+	var cursor uint64
+
+	for {
+		// Scan for message keys
+		keys, nextCursor, err := ds.client.Scan(ctx, cursor, ds.messagePrefix+"*", batchSize).Result()
+		if err != nil {
+			ds.metrics.FailedOperations++
+			return fmt.Errorf("failed to scan message keys: %w", err)
+		}
+
+		if len(keys) == 0 {
+			break
+		}
+
+		var keysToDelete []string
+
+		// Check age if retention policy specifies max age
+		if retentionPolicy.MaxAge > 0 {
+			cutoffTime := time.Now().Add(-retentionPolicy.MaxAge)
+
+			// Get messages in batch
+			pipe := ds.client.Pipeline()
+			cmds := make([]*redis.StringCmd, len(keys))
+
+			for i, key := range keys {
+				cmds[i] = pipe.Get(ctx, key)
+			}
+
+			_, err = pipe.Exec(ctx)
+			if err != nil && err != redis.Nil {
+				cursor = nextCursor
+				if cursor == 0 {
+					break
+				}
+				continue
+			}
+
+			// Check timestamps
+			for i, cmd := range cmds {
+				data, err := cmd.Bytes()
+				if err != nil {
+					continue
+				}
+
+				message, err := ds.serializer.Deserialize(data)
+				if err != nil {
+					continue
+				}
+
+				if time.Unix(message.Timestamp, 0).Before(cutoffTime) {
+					keysToDelete = append(keysToDelete, keys[i])
+				}
+			}
+		}
+
+		// Delete expired keys
+		if len(keysToDelete) > 0 {
+			err := ds.client.Del(ctx, keysToDelete...).Err()
+			if err != nil {
+				ds.metrics.FailedOperations++
+				return fmt.Errorf("failed to delete expired keys: %w", err)
+			}
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	ds.metrics.SuccessfulOperations++
+	return nil
 }

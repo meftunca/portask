@@ -1,3 +1,0 @@
-2025/07/13 22:23:58 🚀 Starting Portask v1.0.0 - Full Protocol Compatibility
-2025/07/13 22:23:58 📊 Target Performance: >1000000 messages/sec, <50MB memory, <1ms latency
-2025/07/13 22:23:58 Failed to initialize compressors: [COMPRESSION_ERROR] compression failed for algorithm: zstd: window size must be at least 1024

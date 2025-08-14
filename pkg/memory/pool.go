@@ -10,7 +10,19 @@ import (
 	"unsafe"
 )
 
+// PoolEvent represents a diagnostic event for the pool
+// Type can be "grow", "shrink", "reset", "custom"
+type PoolEvent struct {
+	Time    time.Time
+	Type    string
+	Message string
+	OldSize int
+	NewSize int
+	Stats   PoolStats
+}
+
 // Pool represents a memory pool with automatic sizing and monitoring
+// Now supports custom object types and diagnostics
 type Pool struct {
 	name       string
 	objectSize int
@@ -29,6 +41,10 @@ type Pool struct {
 	enableAutoResize bool
 	resizeThreshold  float64
 	maxGrowthRate    float64
+
+	factory     func() interface{} // Custom object factory
+	diagnostics []PoolEvent        // Recent diagnostic events
+	diagMu      sync.Mutex         // Protect diagnostics
 }
 
 // PoolStats holds pool statistics
@@ -56,9 +72,11 @@ type PoolConfig struct {
 	EnableAutoResize bool
 	ResizeThreshold  float64 // Hit ratio threshold for resizing
 	MaxGrowthRate    float64 // Maximum growth rate per resize
+	Factory          func() interface{}
+	MonitorInterval  time.Duration // Optional: for tests
 }
 
-// NewPool creates a new memory pool
+// NewPool creates a new memory pool (now supports custom object types)
 func NewPool(config PoolConfig) *Pool {
 	if config.ResizeThreshold == 0 {
 		config.ResizeThreshold = 0.8 // 80% hit ratio threshold
@@ -83,11 +101,17 @@ func NewPool(config PoolConfig) *Pool {
 		},
 	}
 
-	// Initialize sync.Pool with factory function
-	p.pool.New = func() interface{} {
-		atomic.AddInt64(&p.allocCount, 1)
-		atomic.AddInt64(&p.missCount, 1)
-		return make([]byte, config.ObjectSize)
+	// Use custom factory if provided
+	if config.Factory != nil {
+		p.factory = config.Factory
+		p.pool.New = config.Factory
+	} else {
+		p.factory = func() interface{} { return make([]byte, config.ObjectSize) }
+		p.pool.New = func() interface{} {
+			atomic.AddInt64(&p.allocCount, 1)
+			atomic.AddInt64(&p.missCount, 1)
+			return make([]byte, config.ObjectSize)
+		}
 	}
 
 	// Pre-allocate initial objects
@@ -100,64 +124,99 @@ func NewPool(config PoolConfig) *Pool {
 
 	// Start monitoring if enabled
 	if config.EnableMonitoring {
-		p.monitor = NewPoolMonitor(p)
+		interval := config.MonitorInterval
+		if interval == 0 {
+			interval = 30 * time.Second
+		}
+		p.monitor = NewPoolMonitorWithInterval(p, interval)
 		go p.monitor.Start()
 	}
 
 	return p
 }
 
-// Get retrieves an object from the pool
-func (p *Pool) Get() []byte {
-	var obj interface{}
+// NewPoolMonitorWithInterval creates a new pool monitor with custom interval
+func NewPoolMonitorWithInterval(pool *Pool, interval time.Duration) *PoolMonitor {
+	return &PoolMonitor{
+		pool:     pool,
+		interval: interval,
+		stopCh:   make(chan struct{}),
+	}
+}
 
-	// Try to get from buffered channel first (faster)
+// Get retrieves an object from the pool (interface{} for custom support)
+func (p *Pool) Get() interface{} {
+	var obj interface{}
 	if p.objects != nil {
 		select {
 		case obj = <-p.objects:
 			atomic.AddInt64(&p.hitCount, 1)
 		default:
-			// Channel empty, fall back to sync.Pool
 			obj = p.pool.Get()
 		}
 	} else {
 		obj = p.pool.Get()
 	}
-
-	// Reset the byte slice
-	buf := obj.([]byte)
-	if len(buf) != p.objectSize {
-		// Size mismatch, create new buffer
-		buf = make([]byte, p.objectSize)
-		atomic.AddInt64(&p.allocCount, 1)
-	} else {
-		// Clear the buffer for reuse
-		for i := range buf {
-			buf[i] = 0
+	// For []byte pools, reset as before
+	if p.factory != nil && p.objectSize > 0 {
+		if buf, ok := obj.([]byte); ok {
+			if len(buf) != p.objectSize {
+				buf = make([]byte, p.objectSize)
+				atomic.AddInt64(&p.allocCount, 1)
+			} else {
+				for i := range buf {
+					buf[i] = 0
+				}
+			}
+			return buf
 		}
 	}
-
-	return buf
+	return obj
 }
 
-// Put returns an object to the pool
-func (p *Pool) Put(obj []byte) {
-	if len(obj) != p.objectSize {
-		// Wrong size, don't return to pool
-		return
+// GetBytes is a helper for []byte pools
+func (p *Pool) GetBytes() []byte {
+	obj := p.Get()
+	if buf, ok := obj.([]byte); ok {
+		return buf
 	}
+	return nil
+}
 
-	// Try to put back to buffered channel first
+// Put returns an object to the pool (interface{} for custom support)
+func (p *Pool) Put(obj interface{}) {
+	if p.objectSize > 0 {
+		if buf, ok := obj.([]byte); ok {
+			if len(buf) != p.objectSize {
+				return
+			}
+		}
+	}
 	if p.objects != nil {
 		select {
 		case p.objects <- obj:
 			return
 		default:
-			// Channel full, fall back to sync.Pool
 		}
 	}
-
 	p.pool.Put(obj)
+}
+
+// AddEvent logs a diagnostic event
+func (p *Pool) AddEvent(event PoolEvent) {
+	p.diagMu.Lock()
+	defer p.diagMu.Unlock()
+	if len(p.diagnostics) > 100 {
+		p.diagnostics = p.diagnostics[1:]
+	}
+	p.diagnostics = append(p.diagnostics, event)
+}
+
+// GetEvents returns recent diagnostic events
+func (p *Pool) GetEvents() []PoolEvent {
+	p.diagMu.Lock()
+	defer p.diagMu.Unlock()
+	return append([]PoolEvent(nil), p.diagnostics...)
 }
 
 // GetStats returns current pool statistics
@@ -179,6 +238,22 @@ func (p *Pool) GetStats() *PoolStats {
 	stats.MemoryUsage = stats.CurrentObjects * int64(p.objectSize)
 
 	return &stats
+}
+
+// ResetAndDrain fully drains and resets the pool
+func (p *Pool) ResetAndDrain() {
+	p.Clear()
+	if p.objects != nil {
+		for len(p.objects) < cap(p.objects) {
+			p.objects <- p.factory()
+		}
+	}
+	p.AddEvent(PoolEvent{
+		Time:    time.Now(),
+		Type:    "reset",
+		Message: "Pool fully reset and drained",
+		Stats:   *p.GetStats(),
+	})
 }
 
 // Resize adjusts the pool size based on usage patterns
@@ -217,6 +292,9 @@ func (p *Pool) Resize(newSize int) {
 
 		atomic.StoreInt64(&p.maxObjects, int64(newSize))
 		p.stats.LastResized = time.Now()
+		// Reset hit/miss counters after resize for adaptive logic
+		atomic.StoreInt64(&p.hitCount, 0)
+		atomic.StoreInt64(&p.missCount, 0)
 	}
 }
 
@@ -293,21 +371,54 @@ func (pm *PoolMonitor) checkAndResize() {
 		return
 	}
 
-	// Check if hit ratio is below threshold
-	if stats.HitRatio < pm.pool.resizeThreshold {
-		// Calculate new size based on miss rate
-		currentSize := int(stats.MaxObjects)
-		missRate := float64(stats.MissCount) / float64(stats.AllocCount)
-		growthFactor := 1.0 + (missRate * pm.pool.maxGrowthRate)
-		newSize := int(float64(currentSize) * growthFactor)
+	currentSize := int(stats.MaxObjects)
+	missRate := float64(stats.MissCount) / float64(stats.AllocCount)
+	growthFactor := 1.0 + (missRate * pm.pool.maxGrowthRate)
+	shrinkFactor := 1.0 - (stats.HitRatio * pm.pool.maxGrowthRate)
 
-		// Cap the growth to prevent excessive memory usage
+	// Grow if hit ratio is low (misses are high)
+	if stats.HitRatio < pm.pool.resizeThreshold {
+		newSize := int(float64(currentSize) * growthFactor)
 		maxSize := currentSize * 2
 		if newSize > maxSize {
 			newSize = maxSize
 		}
+		if newSize > currentSize {
+			pm.pool.Resize(newSize)
+			msg := fmt.Sprintf("Pool '%s' grown to %d objects (hit ratio: %.2f, miss rate: %.2f)", stats.Name, newSize, stats.HitRatio, missRate)
+			fmt.Println("[PoolMonitor]", msg)
+			pm.pool.AddEvent(PoolEvent{
+				Time:    time.Now(),
+				Type:    "grow",
+				Message: msg,
+				OldSize: currentSize,
+				NewSize: newSize,
+				Stats:   *stats,
+			})
+		}
+		return
+	}
 
-		pm.pool.Resize(newSize)
+	// Shrink if hit ratio is very high (pool is overprovisioned)
+	if stats.HitRatio > 0.98 && currentSize > 32 { // Don't shrink below 32
+		newSize := int(float64(currentSize) * shrinkFactor)
+		minSize := 32
+		if newSize < minSize {
+			newSize = minSize
+		}
+		if newSize < currentSize {
+			pm.pool.Resize(newSize)
+			msg := fmt.Sprintf("Pool '%s' shrunk to %d objects (hit ratio: %.2f)", stats.Name, newSize, stats.HitRatio)
+			fmt.Println("[PoolMonitor]", msg)
+			pm.pool.AddEvent(PoolEvent{
+				Time:    time.Now(),
+				Type:    "shrink",
+				Message: msg,
+				OldSize: currentSize,
+				NewSize: newSize,
+				Stats:   *stats,
+			})
+		}
 	}
 }
 
@@ -357,12 +468,12 @@ func GetGlobalPool(size int) *Pool {
 
 // GetBuffer retrieves a buffer from the global pool
 func GetBuffer(size int) []byte {
-	// Round up to next power of 2 for better pool utilization
 	poolSize := nextPowerOf2(size)
 	pool := GetGlobalPool(poolSize)
-	buf := pool.Get()
-
-	// Return slice of requested size
+	buf := pool.GetBytes()
+	if buf == nil {
+		return make([]byte, size)
+	}
 	return buf[:size]
 }
 
@@ -433,12 +544,13 @@ func (fb *FastBuffer) Write(p []byte) (int, error) {
 }
 
 // WriteByte writes a single byte
-func (fb *FastBuffer) WriteByte(b byte) {
+func (fb *FastBuffer) WriteByte(b byte) error {
 	if fb.pos >= len(fb.data) {
 		fb.grow()
 	}
 	fb.data[fb.pos] = b
 	fb.pos++
+	return nil
 }
 
 // WriteString writes a string
@@ -652,13 +764,13 @@ type BufferPool struct {
 	pools map[int]*sync.Pool
 	sizes []int
 	mu    sync.RWMutex
+	stats map[int]int64 // usage count per size
 }
 
-// NewBufferPool creates a new buffer pool with predefined sizes
 func NewBufferPool() *BufferPool {
 	sizes := []int{32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536}
 	pools := make(map[int]*sync.Pool)
-
+	stats := make(map[int]int64)
 	for _, size := range sizes {
 		size := size // capture for closure
 		pools[size] = &sync.Pool{
@@ -666,48 +778,38 @@ func NewBufferPool() *BufferPool {
 				return make([]byte, 0, size)
 			},
 		}
+		stats[size] = 0
 	}
-
 	return &BufferPool{
 		pools: pools,
 		sizes: sizes,
+		stats: stats,
 	}
 }
 
-// Get retrieves a buffer of at least the specified size
 func (bp *BufferPool) Get(size int) []byte {
 	poolSize := bp.findPoolSize(size)
 	if poolSize == 0 {
-		// Size too large, allocate directly
 		return make([]byte, 0, size)
 	}
-
+	bp.mu.Lock()
+	bp.stats[poolSize]++
+	bp.mu.Unlock()
 	bp.mu.RLock()
 	pool := bp.pools[poolSize]
 	bp.mu.RUnlock()
-
 	buf := pool.Get().([]byte)
-	return buf[:0] // Reset length but keep capacity
+	return buf[:0]
 }
 
-// Put returns a buffer to the pool
-func (bp *BufferPool) Put(buf []byte) {
-	if buf == nil {
-		return
-	}
-
-	capacity := cap(buf)
-	poolSize := bp.findPoolSize(capacity)
-	if poolSize == 0 {
-		// Buffer too large for pooling
-		return
-	}
-
+func (bp *BufferPool) GetStats() map[int]int64 {
 	bp.mu.RLock()
-	pool := bp.pools[poolSize]
-	bp.mu.RUnlock()
-
-	pool.Put(buf)
+	defer bp.mu.RUnlock()
+	copyStats := make(map[int]int64)
+	for k, v := range bp.stats {
+		copyStats[k] = v
+	}
+	return copyStats
 }
 
 // findPoolSize finds the appropriate pool size for the given size
@@ -719,3 +821,39 @@ func (bp *BufferPool) findPoolSize(size int) int {
 	}
 	return 0 // Too large
 }
+
+// put returns a buffer to the appropriate pool
+func (bp *BufferPool) Put(buf []byte) {
+	if len(buf) == 0 {
+		return // Nothing to put back
+	}
+	poolSize := bp.findPoolSize(cap(buf))
+	if poolSize == 0 {
+		return // No appropriate pool
+	}
+	bp.mu.RLock()
+	pool := bp.pools[poolSize]
+	bp.mu.RUnlock()
+	buf = buf[:0] // Reset slice to empty but keep capacity
+	pool.Put(buf)
+	bp.mu.Lock()
+	bp.stats[poolSize]--
+	bp.mu.Unlock()
+}
+
+// Usage example and best practices (as comments):
+/*
+// Example: Custom object pool
+customPool := NewPool(PoolConfig{
+	Name: "custom",
+	ObjectSize: 0, // ignored
+	Factory: func() interface{} { return &MyStruct{} },
+})
+obj := customPool.Get().(*MyStruct)
+customPool.Put(obj)
+
+// Example: Accessing diagnostics
+for _, event := range customPool.GetEvents() {
+	fmt.Println(event.Time, event.Type, event.Message)
+}
+*/

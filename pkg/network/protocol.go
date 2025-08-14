@@ -7,8 +7,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
+	"net"
 	"sync/atomic"
 	"time"
 
@@ -69,6 +72,12 @@ const (
 )
 
 // ProtocolHeader represents the message header
+// Advanced protocol features: priority, batch, encryption, heartbeat
+// Flags: Compressed, Encrypted, Batch, Priority
+// Priority: 0 (normal), 1 (high), 2 (critical)
+// Heartbeat: MessageTypeHeartbeat
+// Batch: FlagBatch
+// Encryption: FlagEncrypted
 type ProtocolHeader struct {
 	Magic    uint32
 	Version  uint8
@@ -79,6 +88,9 @@ type ProtocolHeader struct {
 }
 
 // ProtocolMessage represents a complete protocol message
+// If FlagBatch is set, payload is a batch of messages (JSON array)
+// If FlagEncrypted is set, payload is encrypted
+// If FlagPriority is set, header.Flags contains priority level
 type ProtocolMessage struct {
 	Header  ProtocolHeader
 	Payload []byte
@@ -248,7 +260,7 @@ func (h *PortaskProtocolHandler) validateChecksum(header *ProtocolHeader, payloa
 // handlePublish handles message publish requests
 func (h *PortaskProtocolHandler) handlePublish(ctx context.Context, conn *Connection, header *ProtocolHeader, payload []byte) error {
 	start := time.Now()
-	defer h.updateProcessTime(time.Since(start))
+	defer func() { h.updateProcessTime(time.Since(start)) }()
 
 	// Decompress if needed
 	if header.Flags&FlagCompressed != 0 {
@@ -279,7 +291,7 @@ func (h *PortaskProtocolHandler) handlePublish(ctx context.Context, conn *Connec
 // handleSubscribe handles subscription requests
 func (h *PortaskProtocolHandler) handleSubscribe(ctx context.Context, conn *Connection, header *ProtocolHeader, payload []byte) error {
 	start := time.Now()
-	defer h.updateProcessTime(time.Since(start))
+	defer func() { h.updateProcessTime(time.Since(start)) }()
 
 	// Parse subscription request from payload
 	var subscribeRequest struct {
@@ -493,7 +505,7 @@ func (h *PortaskProtocolHandler) processJSONMessage(ctx context.Context, conn *C
 // handleJSONPublish handles JSON publish messages
 func (h *PortaskProtocolHandler) handleJSONPublish(ctx context.Context, conn *Connection, jsonMsg map[string]interface{}) error {
 	start := time.Now()
-	defer h.updateProcessTime(time.Since(start))
+	defer func() { h.updateProcessTime(time.Since(start)) }()
 
 	topic, ok := jsonMsg["topic"].(string)
 	if !ok {
@@ -562,18 +574,21 @@ func (h *PortaskProtocolHandler) handleJSONFetch(ctx context.Context, conn *Conn
 
 // calculateCRC32 calculates CRC32 checksum
 func calculateCRC32(data []byte) uint32 {
-	// TODO: Implement actual CRC32 calculation
-	// For now, use simple hash
-	var hash uint32
-	for _, b := range data {
-		hash = hash*31 + uint32(b)
-	}
-	return hash
+	return crc32.ChecksumIEEE(data)
 }
 
 // isRecoverableError checks if an error is recoverable
 func isRecoverableError(err error) bool {
-	// TODO: Implement proper error classification
+	// Production-grade error classification
+	if ne, ok := err.(net.Error); ok {
+		return ne.Timeout() // Only treat timeouts as recoverable
+	}
+	if err == io.EOF {
+		return false // EOF is not recoverable
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
 	return true
 }
 

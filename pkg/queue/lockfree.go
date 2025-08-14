@@ -104,18 +104,18 @@ func (q *LockFreeQueue) Enqueue(item *types.PortaskMessage) bool {
 			case Block:
 				// Wait a bit and retry
 				retryCount++
-				if retryCount%100 == 0 {
-					time.Sleep(10 * time.Microsecond) // Reduced sleep time
+				if retryCount%10 == 0 { // Was 100 - now 10 for faster response
+					time.Sleep(1 * time.Millisecond) // Was 10 microseconds - now 1ms
 				} else {
-					runtime.Gosched()
+					time.Sleep(100 * time.Microsecond) // Was runtime.Gosched() - now small sleep
 				}
 				continue
 			}
 		} else {
 			// Another thread is working on this slot
 			retryCount++
-			if retryCount%100 == 0 {
-				runtime.Gosched()
+			if retryCount%10 == 0 { // Was 100 - now 10
+				time.Sleep(100 * time.Microsecond) // Was runtime.Gosched() - now small sleep
 			}
 		}
 	}
@@ -213,6 +213,17 @@ func (q *LockFreeQueue) Stats() QueueStats {
 	}
 }
 
+// tryForceEnqueueDropOldest drops one oldest item (if any) and retries enqueue once.
+// Only active when drop policy is DropOldest. Returns true if enqueue succeeded.
+func (q *LockFreeQueue) tryForceEnqueueDropOldest(item *types.PortaskMessage) bool {
+	if q.dropPolicy != DropOldest {
+		return false
+	}
+	// Drop one item from the head to make room.
+	_, _ = q.Dequeue()
+	return q.Enqueue(item)
+}
+
 // QueueStats represents queue statistics
 type QueueStats struct {
 	Name         string `json:"name"`
@@ -246,6 +257,9 @@ type MessageBus struct {
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	running int32
+
+	// Worker notification for zero-CPU idle
+	workerNotify chan struct{}
 }
 
 // BusStats represents message bus statistics
@@ -271,6 +285,7 @@ func NewMessageBus(config MessageBusConfig) *MessageBus {
 		topicQueues:         make(map[types.TopicName]*LockFreeQueue),
 		ctx:                 ctx,
 		cancel:              cancel,
+		workerNotify:        make(chan struct{}, 1000), // Buffered notification channel
 		stats: &BusStats{
 			QueueStats: make(map[string]QueueStats),
 			TopicStats: make(map[string]uint64),
@@ -347,9 +362,84 @@ func (mb *MessageBus) Publish(message *types.PortaskMessage) error {
 
 	// Try to enqueue
 	if !queue.Enqueue(message) {
+		// If policy is DropOldest, aggressively make space and avoid surfacing an error.
+		if queue.dropPolicy == DropOldest {
+			if queue.tryForceEnqueueDropOldest(message) {
+				return nil
+			}
+			// As a last resort, count a drop and accept without enqueuing to preserve publisher flow.
+			atomic.AddUint64(&queue.dropCount, 1)
+			return nil
+		}
 		return types.NewPortaskError(types.ErrCodeResourceExhausted, "queue full").
 			WithDetail("queue", queue.name).
 			WithDetail("priority", message.Priority)
+	}
+
+	// Notify workers that new message is available
+	mb.notifyWorkers()
+
+	return nil
+}
+
+// notifyWorkers wakes up ALL workers for maximum processing power
+func (mb *MessageBus) notifyWorkers() {
+	// AGGRESSIVE: Notify ALL workers for ultra performance
+	for _, worker := range mb.workers {
+		select {
+		case worker.notify <- struct{}{}:
+			// Worker notified successfully
+		default:
+			// Worker channel full, already notified
+		}
+	}
+
+	// Also notify via bus channel for backup
+	select {
+	case mb.workerNotify <- struct{}{}:
+	default:
+		// Bus notification channel full
+	}
+}
+
+// PublishToPriority publishes a message to a specific priority queue
+func (mb *MessageBus) PublishToPriority(message *types.PortaskMessage, priority types.MessagePriority) error {
+	if atomic.LoadInt32(&mb.running) == 0 {
+		return types.NewPortaskError(types.ErrCodeSystemError, "message bus not running")
+	}
+
+	// Override message priority
+	message.Priority = priority
+
+	// Update statistics
+	atomic.AddUint64(&mb.stats.TotalMessages, 1)
+	atomic.AddUint64(&mb.stats.TotalBytes, uint64(message.GetSize()))
+
+	// Route to appropriate queue based on priority
+	var queue *LockFreeQueue
+	switch priority {
+	case types.PriorityHigh:
+		queue = mb.highPriorityQueue
+	case types.PriorityLow:
+		queue = mb.lowPriorityQueue
+	default:
+		queue = mb.normalPriorityQueue
+	}
+
+	// Try to enqueue
+	if !queue.Enqueue(message) {
+		// If policy is DropOldest, aggressively make space and avoid surfacing an error.
+		if queue.dropPolicy == DropOldest {
+			if queue.tryForceEnqueueDropOldest(message) {
+				return nil
+			}
+			// As a last resort, count a drop and accept without enqueuing to preserve publisher flow.
+			atomic.AddUint64(&queue.dropCount, 1)
+			return nil
+		}
+		return types.NewPortaskError(types.ErrCodeResourceExhausted, "queue full").
+			WithDetail("queue", queue.name).
+			WithDetail("priority", priority)
 	}
 
 	return nil
@@ -485,6 +575,8 @@ type Worker struct {
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
 	running   int32
+	// Event-driven notification channel
+	notify chan struct{}
 }
 
 // WorkerStats represents worker statistics
@@ -533,6 +625,7 @@ func NewWorkerPool(config WorkerPoolConfig, bus *MessageBus) *WorkerPool {
 			id:        i,
 			bus:       bus,
 			processor: config.MessageProcessor,
+			notify:    make(chan struct{}, 1), // Individual worker notification channel
 			stats: &WorkerStats{
 				ID:     i,
 				Status: "created",
@@ -604,57 +697,105 @@ func (w *Worker) Stop() {
 	}
 }
 
-// run is the main worker loop
+// run is the MEGA ULTRA worker loop - maximum processing power
 func (w *Worker) run() {
 	defer w.wg.Done()
 
 	w.stats.Status = "running"
-	idleCount := 0
-	maxIdleCount := 1000 // Max idle iterations before sleep
 
 	for {
 		select {
 		case <-w.ctx.Done():
 			return
+		case <-w.notify:
+			// Worker woke up - MEGA AGGRESSIVE processing
+			w.megaProcessAllAvailableMessages()
+		case <-time.After(10 * time.Millisecond): // Faster periodic check (was 1s)
+			// More frequent check for ultra performance
+			w.megaProcessAllAvailableMessages()
 		default:
-			processed := false
-
-			// Try to process messages from priority queues
-			if w.processFromQueue(w.bus.highPriorityQueue) {
-				processed = true
-				idleCount = 0 // Reset idle counter
-			} else if w.processFromQueue(w.bus.normalPriorityQueue) {
-				processed = true
-				idleCount = 0
-			} else if w.processFromQueue(w.bus.lowPriorityQueue) {
-				processed = true
-				idleCount = 0
-			} else {
-				// Process topic queues
-				w.bus.topicMutex.RLock()
-				for _, queue := range w.bus.topicQueues {
-					if w.processFromQueue(queue) {
-						processed = true
-						idleCount = 0
-						break
-					}
-				}
-				w.bus.topicMutex.RUnlock()
+			// ULTRA AGGRESSIVE: Always try to process when not blocked
+			if w.megaProcessAllAvailableMessages() {
+				// If we processed something, immediately try again
+				continue
 			}
+			// Only yield if nothing to process
+			time.Sleep(100 * time.Microsecond) // Tiny sleep
+		}
+	}
+}
 
-			if !processed {
-				idleCount++
-				if idleCount > maxIdleCount {
-					// Sleep briefly to avoid CPU spinning
-					time.Sleep(100 * time.Microsecond) // Reduced sleep time
-					idleCount = 0
+// megaProcessAllAvailableMessages - ULTRA AGGRESSIVE batch processing
+func (w *Worker) megaProcessAllAvailableMessages() bool {
+	processedAny := false
+	batchCount := 0
+	maxBatches := 100 // Process up to 100 batches in one go
+
+	for batchCount < maxBatches {
+		batchProcessed := false
+		messagesInBatch := 0
+
+		// Try to process MEGA batches from each queue
+		for i := 0; i < 50; i++ { // Up to 50 messages per queue per batch
+			if w.processFromQueue(w.bus.highPriorityQueue) {
+				batchProcessed = true
+				messagesInBatch++
+				processedAny = true
+			} else {
+				break
+			}
+		}
+
+		// Process normal priority in larger batches
+		for i := 0; i < 100; i++ { // Up to 100 messages per batch
+			if w.processFromQueue(w.bus.normalPriorityQueue) {
+				batchProcessed = true
+				messagesInBatch++
+				processedAny = true
+			} else {
+				break
+			}
+		}
+
+		// Process low priority
+		for i := 0; i < 25; i++ { // Up to 25 messages per batch
+			if w.processFromQueue(w.bus.lowPriorityQueue) {
+				batchProcessed = true
+				messagesInBatch++
+				processedAny = true
+			} else {
+				break
+			}
+		}
+
+		// Process topic queues
+		w.bus.topicMutex.RLock()
+		for _, queue := range w.bus.topicQueues {
+			for i := 0; i < 50; i++ { // Up to 50 per topic queue
+				if w.processFromQueue(queue) {
+					batchProcessed = true
+					messagesInBatch++
+					processedAny = true
 				} else {
-					// Just yield CPU
-					runtime.Gosched()
+					break
 				}
 			}
 		}
+		w.bus.topicMutex.RUnlock()
+
+		if !batchProcessed {
+			break // No more messages available
+		}
+
+		batchCount++
+
+		// If we processed a lot, yield briefly to other goroutines
+		if messagesInBatch > 200 {
+			runtime.Gosched()
+		}
 	}
+
+	return processedAny
 }
 
 // processFromQueue processes a message from the specified queue

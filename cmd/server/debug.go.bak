@@ -1,0 +1,127 @@
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"runtime/pprof"
+	"syscall"
+	"time"
+
+	"github.com/meftunca/portask/pkg/compression"
+	"github.com/meftunca/portask/pkg/config"
+	"github.com/meftunca/portask/pkg/queue"
+	"github.com/meftunca/portask/pkg/serialization"
+)
+
+func main() {
+	// Start CPU profiling server on :6060
+	go func() {
+		log.Println("🔍 Starting pprof server on :6060")
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
+	// Start CPU profiling to file
+	cpuFile, err := os.Create("cpu.prof")
+	if err != nil {
+		log.Fatalf("Could not create CPU profile: %v", err)
+	}
+	defer cpuFile.Close()
+	if err := pprof.StartCPUProfile(cpuFile); err != nil {
+		log.Fatalf("Could not start CPU profile: %v", err)
+	}
+	defer pprof.StopCPUProfile()
+
+	log.Printf("🔍 CPU Profiling enabled - will create cpu.prof file")
+	log.Printf("🌐 pprof web interface: http://localhost:6060/debug/pprof/")
+
+	// Load configuration
+	cfg, err := config.LoadConfig("configs/config.yaml")
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	log.Printf("🚀 Starting Portask v1.0.0 - DEBUG MODE")
+
+	// Initialize context for graceful shutdown
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initialize serialization
+	codecFactory := serialization.NewCodecFactory()
+	if err := codecFactory.InitializeDefaultCodecs(cfg); err != nil {
+		log.Fatalf("Failed to initialize codecs: %v", err)
+	}
+	codec, err := codecFactory.GetCodec(cfg.Serialization.Type)
+	if err != nil {
+		log.Fatalf("Failed to create codec: %v", err)
+	}
+
+	// Initialize compression
+	compressorFactory := compression.NewCompressorFactory()
+	if err := compressorFactory.InitializeDefaultCompressors(cfg); err != nil {
+		log.Fatalf("Failed to initialize compressors: %v", err)
+	}
+	compressor, err := compressorFactory.GetCompressor(cfg.Compression.Type)
+	if err != nil {
+		log.Fatalf("Failed to create compressor: %v", err)
+	}
+
+	// Use simple in-memory storage for debug - not needed for queue test
+	log.Printf("📦 Skipping storage for debug")
+
+	// Initialize message processor
+	processor := queue.NewDefaultMessageProcessor(codec, compressor)
+
+	// Minimal bus config for debug
+	busConfig := queue.MessageBusConfig{
+		HighPriorityQueueSize:   100,
+		NormalPriorityQueueSize: 1000,
+		LowPriorityQueueSize:    100,
+		DropPolicy:              queue.DropOldest,
+		WorkerPoolConfig: queue.WorkerPoolConfig{
+			WorkerCount:      2, // Minimal workers
+			MessageProcessor: processor,
+			BatchSize:        10,
+			BatchTimeout:     100 * time.Millisecond,
+			EnableProfiling:  false,
+		},
+		EnableTopicQueues: true,
+	}
+
+	// Create and start message bus
+	messageBus := queue.NewMessageBus(busConfig)
+	if err := messageBus.Start(); err != nil {
+		log.Fatalf("Failed to start message bus: %v", err)
+	}
+	defer messageBus.Stop()
+
+	log.Printf("✅ Message bus started with 2 workers")
+
+	// Skip protocol servers for now - just run message bus
+	log.Printf("🔍 DEBUG: Running minimal message bus only")
+	log.Printf("⏹️  Press Ctrl+C to stop and generate CPU profile")
+
+	// Wait for shutdown signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Simple monitoring without goroutines
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-sigChan:
+			log.Printf("🛑 Shutting down...")
+			cancel()
+			return
+		case <-ticker.C:
+			stats := messageBus.GetStats()
+			log.Printf("📊 Messages: %d, Workers: active", stats.TotalMessages)
+		}
+	}
+}

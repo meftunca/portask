@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portask
+  labels:
+    app: portask
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: portask
+  template:
+    metadata:
+      labels:
+        app: portask
+    spec:
+      containers:
+        - name: portask
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+{{- if .Values.env }}
+          env:
+{{ toYaml .Values.env | nindent 12 }}
+{{- end }}
+{{- if .Values.resources }}
+          resources:
+{{ toYaml .Values.resources | nindent 12 }}
+{{- end }}
+{{- if .Values.livenessProbe }}
+          livenessProbe:
+{{ toYaml .Values.livenessProbe | nindent 12 }}
+{{- end }}
+{{- if .Values.readinessProbe }}
+          readinessProbe:
+{{ toYaml .Values.readinessProbe | nindent 12 }}
+{{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: portask-pvc

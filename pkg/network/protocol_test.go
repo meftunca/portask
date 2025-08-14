@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -512,8 +515,43 @@ func TestProtocolMessageTypes(t *testing.T) {
 	}
 }
 
-// Test Connection Interface Compliance
-func TestConnectionInterface(t *testing.T) {
-	// Simple interface compliance test
-	assert.True(t, true)
+// Test Protocol Flags Advanced Features
+func TestProtocolFlagsAdvancedFeatures(t *testing.T) {
+	hb := ProtocolHeader{Type: MessageTypeHeartbeat}
+	assert.Equal(t, uint8(5), hb.Type, "Heartbeat type should be correct")
+}
+
+func TestCalculateCRC32(t *testing.T) {
+	data := []byte("portask-test-data")
+	crc := calculateCRC32(data)
+	// Go's hash/crc32 returns 0xc39f357e for this string
+	expected := uint32(0xc39f357e)
+	assert.Equal(t, expected, crc, "CRC32 calculation should match expected value")
+}
+
+func TestIsRecoverableError(t *testing.T) {
+	timeoutErr := &net.DNSError{IsTimeout: true}
+	assert.True(t, isRecoverableError(timeoutErr), "Timeout error should be recoverable")
+
+	assert.False(t, isRecoverableError(io.EOF), "EOF should not be recoverable")
+	assert.False(t, isRecoverableError(context.Canceled), "Canceled should not be recoverable")
+	// DeadlineExceeded bazen context.DeadlineExceeded ile tam eşleşmeyebilir, string karşılaştırması ile kontrol
+	assert.False(t, isRecoverableError(context.DeadlineExceeded), "DeadlineExceeded should not be recoverable")
+
+	assert.True(t, isRecoverableError(fmt.Errorf("other error")), "Other errors should be recoverable")
+}
+
+func TestProtocol_BatchAndPriority(t *testing.T) {
+	h := &PortaskProtocolHandler{}
+	batchPayload := []byte(`["msg1","msg2","msg3"]`)
+	header := &ProtocolHeader{Magic: ProtocolMagic, Version: ProtocolVersion, Type: MessageTypePublish, Flags: FlagBatch | FlagPriority, Length: uint32(len(batchPayload)), Checksum: calculateCRC32(batchPayload)}
+	// Set maxMessageSize to allow small batch
+	h.maxMessageSize = 1024
+	err := h.validateHeader(header)
+	assert.NoError(t, err)
+	// Simulate batch processing (should parse as JSON array)
+	var arr []string
+	err = json.Unmarshal(batchPayload, &arr)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(arr))
 }

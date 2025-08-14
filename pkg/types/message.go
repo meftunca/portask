@@ -58,6 +58,7 @@ type PortaskMessage struct {
 	// Expiration and retry
 	ExpiresAt int64 `cbor:"ex,omitempty" json:"expires_at,omitempty" msgpack:"ex,omitempty"` // Unix nanoseconds
 	TTL       int64 `cbor:"ttl,omitempty" json:"ttl,omitempty" msgpack:"ttl,omitempty"`      // Duration in nanoseconds
+	Offset    int64 `cbor:"o" json:"offset" msgpack:"o"`                                     // Message offset for storage/queue
 	Attempts  uint8 `cbor:"att,omitempty" json:"attempts,omitempty" msgpack:"att,omitempty"`
 	MaxRetry  uint8 `cbor:"mr,omitempty" json:"max_retry,omitempty" msgpack:"mr,omitempty"`
 

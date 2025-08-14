@@ -71,12 +71,12 @@ type ServerConfig struct {
 	WriteBufferSize int `yaml:"write_buffer_size" json:"write_buffer_size"`
 
 	// Performance settings
-	EnableMultiplex bool `yaml:"enable_multiplex" json:"enable_multiplex"`
-	WorkerPoolSize  int  `yaml:"worker_pool_size" json:"worker_pool_size"`
-	EnableProfiling bool `yaml:"enable_profiling" json:"enable_profiling"`
+	EnableMultiplex bool `yaml:"enable_multiplex" json:"enable_multiplex"` // Enable connection multiplexing for high concurrency
+	WorkerPoolSize  int  `yaml:"worker_pool_size" json:"worker_pool_size"` // Number of worker goroutines for message processing
+	EnableProfiling bool `yaml:"enable_profiling" json:"enable_profiling"` // Enables runtime profiling endpoints
 
 	// TLS settings (for future)
-	EnableTLS bool   `yaml:"enable_tls" json:"enable_tls"`
+	EnableTLS bool   `yaml:"enable_tls" json:"enable_tls"` // Enable TLS/SSL support
 	CertFile  string `yaml:"cert_file" json:"cert_file"`
 	KeyFile   string `yaml:"key_file" json:"key_file"`
 }
@@ -186,14 +186,22 @@ func NewTCPServer(config *ServerConfig, handler ConnectionHandler) *TCPServer {
 
 // Start starts the TCP server
 func (s *TCPServer) Start(ctx context.Context) error {
+	fmt.Printf("[DEBUG] TCPServer.Start called with config: %+v\n", s.config)
 	if !atomic.CompareAndSwapInt32(&s.running, 0, 1) {
+		fmt.Printf("[DEBUG] Server already running\n")
 		return fmt.Errorf("server already running")
 	}
 
 	// Create listener
-	address := fmt.Sprintf("%s:%d", s.config.Address, s.config.Port)
+	// address := fmt.Sprintf("%s:%d", s.config.Address, s.config.Port)
+	address := s.config.Address
+	if s.config.Port != 0 {
+		address = fmt.Sprintf("%s:%d", s.config.Address, s.config.Port)
+	}
+	fmt.Printf("[DEBUG] Attempting to listen on %s (%s)\n", address, s.config.Network)
 	listener, err := net.Listen(s.config.Network, address)
 	if err != nil {
+		fmt.Printf("[ERROR] Failed to listen on %s: %v\n", address, err)
 		atomic.StoreInt32(&s.running, 0)
 		return fmt.Errorf("failed to listen on %s: %w", address, err)
 	}
@@ -201,6 +209,8 @@ func (s *TCPServer) Start(ctx context.Context) error {
 	s.listener = listener
 	s.stats.Status = "running"
 	s.stats.StartTime = time.Now()
+
+	fmt.Printf("[DEBUG] Listener created successfully, starting accept loop\n")
 
 	// Start accepting connections
 	s.wg.Add(1)

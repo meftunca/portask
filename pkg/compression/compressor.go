@@ -197,13 +197,38 @@ type ZstdCompressor struct {
 
 // NewZstdCompressor creates a new Zstd compressor
 func NewZstdCompressor(cfg config.ZstdConfig, level int) (*ZstdCompressor, error) {
-	encoderLevel := zstd.EncoderLevel(level)
+	// Map generic level to valid zstd preset levels to avoid unknown level errors
+	var encoderLevel zstd.EncoderLevel
+	switch {
+	case level <= 0:
+		encoderLevel = zstd.SpeedDefault
+	case level <= 3:
+		encoderLevel = zstd.SpeedFastest
+	case level <= 6:
+		encoderLevel = zstd.SpeedDefault
+	case level <= 10:
+		encoderLevel = zstd.EncoderLevelFromZstd(10) // balanced higher
+	default:
+		encoderLevel = zstd.SpeedBetterCompression
+	}
+
+	// Ensure concurrency is at least 1
+	concurrency := cfg.ConcurrencyMode
+	if concurrency < 1 {
+		concurrency = 1
+	}
+
+	// Ensure window size is at least 1024
+	windowSize := cfg.WindowSize
+	if windowSize < 1024 {
+		windowSize = 1024
+	}
 
 	// Create encoder with optimized settings
 	encoder, err := zstd.NewWriter(nil,
 		zstd.WithEncoderLevel(encoderLevel),
-		zstd.WithEncoderConcurrency(cfg.ConcurrencyMode),
-		zstd.WithWindowSize(cfg.WindowSize),
+		zstd.WithEncoderConcurrency(concurrency),
+		zstd.WithWindowSize(windowSize),
 		zstd.WithZeroFrames(true), // Reduce overhead
 	)
 	if err != nil {
@@ -212,7 +237,7 @@ func NewZstdCompressor(cfg config.ZstdConfig, level int) (*ZstdCompressor, error
 
 	// Create decoder
 	decoder, err := zstd.NewReader(nil,
-		zstd.WithDecoderConcurrency(cfg.ConcurrencyMode),
+		zstd.WithDecoderConcurrency(concurrency),
 		zstd.WithDecoderMaxMemory(64<<20), // 64MB max memory
 	)
 	if err != nil {
@@ -230,8 +255,8 @@ func NewZstdCompressor(cfg config.ZstdConfig, level int) (*ZstdCompressor, error
 	comp.encoderPool.New = func() interface{} {
 		enc, _ := zstd.NewWriter(nil,
 			zstd.WithEncoderLevel(encoderLevel),
-			zstd.WithEncoderConcurrency(cfg.ConcurrencyMode),
-			zstd.WithWindowSize(cfg.WindowSize),
+			zstd.WithEncoderConcurrency(concurrency),
+			zstd.WithWindowSize(windowSize),
 			zstd.WithZeroFrames(true),
 		)
 		return enc
@@ -239,7 +264,7 @@ func NewZstdCompressor(cfg config.ZstdConfig, level int) (*ZstdCompressor, error
 
 	comp.decoderPool.New = func() interface{} {
 		dec, _ := zstd.NewReader(nil,
-			zstd.WithDecoderConcurrency(cfg.ConcurrencyMode),
+			zstd.WithDecoderConcurrency(concurrency),
 			zstd.WithDecoderMaxMemory(64<<20),
 		)
 		return dec

@@ -75,20 +75,20 @@ storage:
     persist_interval_sec: 60
 
 performance:
-  worker_pool_size: 100  # Number of worker goroutines
-  channel_buffer_size: 1000  # Channel buffer sizes
-  batch_processing: true
-  batch_size: 100
-  batch_timeout: "10ms"
-  memory_pool_enabled: true  # Use object pools to reduce GC
-  zero_copy_enabled: true    # Zero-copy optimizations where possible
-  use_memory_mapping: false  # Memory mapping for large messages
+  worker_pool_size: 4  # Very conservative worker count
+  channel_buffer_size: 50  # Small buffer
+  batch_processing: false  # Disable batching for now
+  batch_size: 10
+  batch_timeout: "1s"  # Very long timeout
+  memory_pool_enabled: false  # Disable optimizations for stability
+  zero_copy_enabled: false
+  use_memory_mapping: false
 
 monitoring:
-  enabled: true
+  enabled: false  # Disable monitoring for now
   metrics_port: 9090
   metrics_path: "/metrics"
-  collect_interval: "1s"
+  collect_interval: "10s"  # Much longer interval
   enable_profiling: false
   profiling_port: 6060
   health_check_path: "/health"

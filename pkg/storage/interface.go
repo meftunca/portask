@@ -162,6 +162,37 @@ type StorageManager struct {
 	config  *StorageConfig
 }
 
+func GetInitialStorageConfig() *StorageConfig {
+	return &StorageConfig{
+		MaxConnections:      100,
+		MaxIdleConnections:  10,
+		ConnectionTimeout:   5 * time.Second,
+		ReadTimeout:         5 * time.Second,
+		WriteTimeout:        5 * time.Second,
+		IdleTimeout:         30 * time.Second,
+		MaxRetries:          3,
+		RetryDelay:          100 * time.Millisecond,
+		RetryBackoff:        1.5,
+		BatchSize:           100,
+		EnableBatching:      true,
+		BatchTimeout:        10 * time.Millisecond,
+		EnableCompression:   true,
+		EnablePipelining:    true,
+		HealthCheckInterval: 30 * time.Second,
+		HealthCheckTimeout:  5 * time.Second,
+		RetentionPolicy: &RetentionPolicy{
+			MaxAge:          7 * 24 * time.Hour,      // Default 7 days
+			MaxSizeBytes:    10 * 1024 * 1024 * 1024, // Default 10 GB
+			MaxMessages:     1000000,                 // Default 1 million messages
+			CleanupStrategy: CleanupOldest,
+			BatchSize:       1000, // Default batch size for cleanup
+		},
+	}
+}
+func (sm *StorageManager) GetConfig() *StorageConfig {
+	return sm.config
+}
+
 // NewStorageManager creates a new storage manager
 func NewStorageManager(config *StorageConfig) *StorageManager {
 	return &StorageManager{

@@ -22,7 +22,7 @@ func TestPool(t *testing.T) {
 	pool := NewPool(config)
 
 	t.Run("GetAndPut", func(t *testing.T) {
-		buf := pool.Get()
+		buf := pool.Get().([]byte)
 		if buf == nil {
 			t.Error("Expected buffer to be allocated")
 		}
@@ -37,7 +37,7 @@ func TestPool(t *testing.T) {
 		pool.Put(buf)
 
 		// Get again - should be reused
-		buf2 := pool.Get()
+		buf2 := pool.Get().([]byte)
 		if buf2 == nil {
 			t.Error("Expected buffer to be allocated")
 		}
@@ -48,7 +48,7 @@ func TestPool(t *testing.T) {
 		// Get some objects to generate stats
 		objects := make([][]byte, 10)
 		for i := 0; i < 10; i++ {
-			objects[i] = pool.Get()
+			objects[i] = pool.Get().([]byte)
 		}
 
 		stats := pool.GetStats()
@@ -75,7 +75,7 @@ func TestPool(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				for j := 0; j < iterations; j++ {
-					buf := pool.Get()
+					buf := pool.Get().([]byte)
 					if buf == nil {
 						t.Error("Expected buffer to be allocated")
 						return
@@ -196,7 +196,7 @@ func TestPoolMonitor(t *testing.T) {
 		// Use the pool to generate some activity
 		objects := make([][]byte, 20)
 		for i := 0; i < 20; i++ {
-			objects[i] = pool.Get()
+			objects[i] = pool.Get().([]byte)
 		}
 
 		// Wait a bit for monitoring
@@ -256,6 +256,152 @@ func TestPoolConfig(t *testing.T) {
 	})
 }
 
+func TestPoolAdaptiveResizing(t *testing.T) {
+	config := PoolConfig{
+		Name:             "adaptive-pool",
+		ObjectSize:       256,
+		InitialObjects:   8,
+		MaxObjects:       64,
+		EnableMonitoring: true,
+		EnableAutoResize: true,
+		ResizeThreshold:  0.7, // Aggressive for test
+		MaxGrowthRate:    1.0, // Double per resize
+	}
+	pool := NewPool(config)
+	defer pool.Close()
+
+	// Simulate high miss rate to trigger growth
+	for i := 0; i < 200; i++ {
+		buf := pool.Get().([]byte)
+		// Don't return to pool to simulate misses
+		_ = buf
+	}
+	// Wait for monitor to run
+	time.Sleep(100 * time.Millisecond)
+	stats := pool.GetStats()
+	if stats.MaxObjects <= int64(config.InitialObjects) {
+		t.Errorf("Expected pool to grow, got %d", stats.MaxObjects)
+	}
+
+	// Now simulate high hit rate to trigger shrink
+	for i := 0; i < 1000; i++ {
+		buf := pool.Get().([]byte)
+		pool.Put(buf)
+	}
+	// Wait for monitor to run
+	time.Sleep(100 * time.Millisecond)
+	stats = pool.GetStats()
+	if stats.MaxObjects > 32 {
+		t.Logf("Pool shrunk to %d (should be <= 32 if shrink logic triggered)", stats.MaxObjects)
+	}
+}
+
+func TestPoolDiagnosticsAndCustomFeatures(t *testing.T) {
+	t.Run("DiagnosticsEventLog", func(t *testing.T) {
+		config := PoolConfig{
+			Name:             "diag-pool",
+			ObjectSize:       64,
+			InitialObjects:   4,
+			MaxObjects:       16,
+			EnableMonitoring: true,
+			EnableAutoResize: true,
+			ResizeThreshold:  0.7,
+			MaxGrowthRate:    1.0,
+			MonitorInterval:  10 * time.Millisecond, // Fast for test
+		}
+		pool := NewPool(config)
+		defer pool.Close()
+		// Simulate usage to trigger grow
+		for i := 0; i < 200; i++ {
+			_ = pool.Get().([]byte)
+		}
+		time.Sleep(50 * time.Millisecond)
+		// Simulate usage to trigger shrink (ensure high hit ratio)
+		for i := 0; i < 1000; i++ {
+			buf := pool.Get().([]byte)
+			pool.Put(buf)
+		}
+		time.Sleep(50 * time.Millisecond)
+		pool.ResetAndDrain()
+		// Check event log
+		events := pool.GetEvents()
+		if len(events) == 0 {
+			t.Error("Expected diagnostic events to be logged")
+		}
+		foundGrow, foundShrink, foundReset := false, false, false
+		for _, ev := range events {
+			if ev.Type == "grow" {
+				foundGrow = true
+			}
+			if ev.Type == "shrink" {
+				foundShrink = true
+			}
+			if ev.Type == "reset" {
+				foundReset = true
+			}
+		}
+		if !foundGrow {
+			t.Error("Expected at least one grow event")
+		}
+		if !foundShrink {
+			t.Error("Expected at least one shrink event")
+		}
+		if !foundReset {
+			t.Error("Expected at least one reset event")
+		}
+	})
+
+	t.Run("CustomObjectPool", func(t *testing.T) {
+		type myStruct struct{ X int }
+		pool := NewPool(PoolConfig{
+			Name:    "custom-obj-pool",
+			Factory: func() interface{} { return &myStruct{} },
+		})
+		obj := pool.Get().(*myStruct)
+		obj.X = 42
+		pool.Put(obj)
+		obj2 := pool.Get().(*myStruct)
+		if obj2.X != 42 {
+			t.Error("Expected pooled object to retain value (no reset logic)")
+		}
+	})
+
+	t.Run("ResetAndDrain", func(t *testing.T) {
+		pool := NewPool(PoolConfig{
+			Name:           "reset-pool",
+			ObjectSize:     32,
+			InitialObjects: 2,
+		})
+		pool.Get() // take one out
+		pool.ResetAndDrain()
+		stats := pool.GetStats()
+		if stats.CurrentObjects != 2 {
+			t.Errorf("Expected pool to be refilled to 2, got %d", stats.CurrentObjects)
+		}
+		found := false
+		for _, ev := range pool.GetEvents() {
+			if ev.Type == "reset" {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("Expected reset event to be logged")
+		}
+	})
+
+	t.Run("BufferPoolStats", func(t *testing.T) {
+		bp := NewBufferPool()
+		for i := 0; i < 10; i++ {
+			_ = bp.Get(64)
+			_ = bp.Get(128)
+		}
+		stats := bp.GetStats()
+		if stats[64] == 0 || stats[128] == 0 {
+			t.Error("Expected BufferPool stats to track usage")
+		}
+	})
+}
+
 // Benchmarks
 func BenchmarkPool(b *testing.B) {
 	config := PoolConfig{
@@ -269,7 +415,7 @@ func BenchmarkPool(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			buf := pool.Get()
+			buf := pool.Get().([]byte)
 			copy(buf[:10], []byte("test data"))
 			pool.Put(buf)
 		}
@@ -301,7 +447,7 @@ func BenchmarkMemoryVsStandard(b *testing.B) {
 	b.Run("PoolAllocation", func(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				buf := pool.Get()
+				buf := pool.Get().([]byte)
 				pool.Put(buf)
 			}
 		})
