@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/meftunca/portask/pkg/queue"
+	"github.com/meftunca/portask/pkg/storage"
 	"github.com/meftunca/portask/pkg/types"
 )
 
 type AMQPStorageAdapter struct {
-	storage    StorageBackend
+	storage    storage.MessageStore
 	messageBus *queue.MessageBus
 }
 

@@ -15,7 +15,7 @@ type InMemoryStore struct {
 	offsets  map[string]*types.ConsumerOffset
 }
 
-func NewInMemoryStore() *InMemoryStore {
+func NewInMemoryStore() storage.MessageStore {
 	return &InMemoryStore{
 		messages: make(map[string]*types.PortaskMessage),
 		topics:   make(map[string]*types.TopicInfo),

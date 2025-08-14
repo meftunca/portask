@@ -205,6 +205,3 @@ func main() {
 	printMinimalStats(messageBus)
 	log.Printf("👋 Portask stopped gracefully")
 }
-
-// performanceMonitor monitors and reports performance metrics
-// (removed duplicate, see demo.go)

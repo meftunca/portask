@@ -3,6 +3,7 @@ package kafka
 import (
 	"bytes"
 	"encoding/binary"
+	"log"
 )
 
 // handleApiVersions handles API_VERSIONS requests
@@ -135,6 +136,8 @@ func (h *KafkaProtocolHandler) handleMetadata(request *KafkaRequest) []byte {
 
 // handleProduce handles PRODUCE requests
 func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
+	log.Printf("🔍 Handling Produce API request (API 0) - body size: %d bytes", len(request.Body))
+	
 	var buf bytes.Buffer
 
 	// Parse request
@@ -143,14 +146,17 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 	// Read required acks
 	var requiredAcks int16
 	binary.Read(reqBuf, binary.BigEndian, &requiredAcks)
+	log.Printf("🔍 Produce request - requiredAcks: %d", requiredAcks)
 
 	// Read timeout
 	var timeout int32
 	binary.Read(reqBuf, binary.BigEndian, &timeout)
+	log.Printf("🔍 Produce request - timeout: %d", timeout)
 
 	// Read topic data
 	var topicCount int32
 	binary.Read(reqBuf, binary.BigEndian, &topicCount)
+	log.Printf("🔍 Produce request - topicCount: %d", topicCount)
 
 	// Build response
 	binary.Write(&buf, binary.BigEndian, int32(topicCount)) // topic count
@@ -158,11 +164,13 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 	for i := int32(0); i < topicCount; i++ {
 		// Read topic name
 		topic, _ := h.readString(reqBuf)
+		log.Printf("🔍 Produce request - topic[%d]: %s", i, topic)
 		h.writeString(&buf, topic)
 
 		// Read partition data
 		var partitionCount int32
 		binary.Read(reqBuf, binary.BigEndian, &partitionCount)
+		log.Printf("🔍 Produce request - partitionCount for topic %s: %d", topic, partitionCount)
 		binary.Write(&buf, binary.BigEndian, int32(partitionCount))
 
 		for j := int32(0); j < partitionCount; j++ {
@@ -173,6 +181,7 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 			// Read message set size
 			var messageSetSize int32
 			binary.Read(reqBuf, binary.BigEndian, &messageSetSize)
+			log.Printf("🔍 Produce request - partition %d, messageSetSize: %d", partition, messageSetSize)
 
 			// Read messages (simplified - just skip for now)
 			messageSet := make([]byte, messageSetSize)
@@ -180,6 +189,11 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 
 			// For demo, just return success
 			offset, err := h.messageStore.ProduceMessage(topic, partition, nil, messageSet)
+			if err != nil {
+				log.Printf("❌ Failed to produce message to %s[%d]: %v", topic, partition, err)
+			} else {
+				log.Printf("✅ Produced message to %s[%d] at offset %d", topic, partition, offset)
+			}
 
 			// Write partition response
 			binary.Write(&buf, binary.BigEndian, partition)
@@ -197,6 +211,8 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 
 	// Throttle time
 	binary.Write(&buf, binary.BigEndian, int32(0))
+
+	log.Printf("✅ Produce API response created - response size: %d bytes", buf.Len())
 
 	return buf.Bytes()
 }

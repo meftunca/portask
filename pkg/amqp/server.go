@@ -1,6 +1,7 @@
 package amqp
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -109,37 +110,77 @@ func (s *EnhancedAMQPServer) handleConnection(conn net.Conn) {
 	s.connections[connID] = &Connection{conn: conn, id: connID}
 	s.mutex.Unlock()
 
-	// AMQP handshake (örnek, gerçek handshake için ek protokol gerekebilir)
-	time.Sleep(100 * time.Millisecond)
+	// AMQP Protocol Handshake - proper AMQP 0.9.1 header
+	// Expect "AMQP\x00\x00\x09\x01" (8 bytes)
+	header := make([]byte, 8)
+	n, err := conn.Read(header)
+	if err != nil || n != 8 {
+		log.Printf("❌ Failed to read AMQP header: %v", err)
+		return
+	}
+
+	// Check for proper AMQP header
+	expectedHeader := []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}
+	if !bytes.Equal(header, expectedHeader) {
+		log.Printf("❌ Invalid AMQP header: %v", header)
+		return
+	}
+
 	log.Printf("✅ AMQP handshake completed for %s", connID)
 
+	// Send Connection.Start frame (simplified)
+	err = s.sendConnectionStart(conn)
+	if err != nil {
+		log.Printf("❌ Failed to send Connection.Start: %v", err)
+		return
+	}
+
 	for {
+		// Read frame header (7 bytes)
 		head := make([]byte, 7)
-		_, err := conn.Read(head)
+		n, err := conn.Read(head)
 		if err != nil {
+			log.Printf("🔌 Connection closed: %v", err)
 			break
 		}
+		if n != 7 {
+			log.Printf("❌ Invalid frame header size: %d", n)
+			break
+		}
+
 		frameType := int(head[0])
 		channelID := int(binary.BigEndian.Uint16(head[1:3]))
 		size := int(binary.BigEndian.Uint32(head[3:7]))
-		if size > 65536 {
-			log.Printf("[AMQP] Frame too large: %d", size)
+
+		log.Printf("🔍 AMQP Frame: type=%d, channel=%d, size=%d", frameType, channelID, size)
+
+		// Reasonable frame size limit (1MB)
+		if size > 1024*1024 {
+			log.Printf("❌ Frame too large: %d", size)
 			break
 		}
+
+		// Read frame payload
 		payload := make([]byte, size)
-		_, err = conn.Read(payload)
-		if err != nil {
-			break
+		if size > 0 {
+			n, err = conn.Read(payload)
+			if err != nil || n != size {
+				log.Printf("❌ Failed to read frame payload: %v", err)
+				break
+			}
 		}
+
+		// Read frame end marker (1 byte - should be 0xCE)
 		end := make([]byte, 1)
-		_, err = conn.Read(end)
-		if err != nil || end[0] != 0xCE {
-			log.Printf("[AMQP] Invalid frame end byte")
+		n, err = conn.Read(end)
+		if err != nil || n != 1 || end[0] != 0xCE {
+			log.Printf("❌ Invalid frame end byte: 0x%02X", end[0])
 			break
 		}
+
 		err = s.handleAMQPFrameWithChannel(conn, channelID, frameType, payload)
 		if err != nil {
-			log.Printf("[AMQP] Frame handling error: %v", err)
+			log.Printf("❌ Frame handling error: %v", err)
 		}
 	}
 
@@ -366,3 +407,15 @@ const (
 	FrameBody      = 3
 	FrameHeartbeat = 8
 )
+
+// sendConnectionStart sends AMQP Connection.Start frame
+func (s *EnhancedAMQPServer) sendConnectionStart(conn net.Conn) error {
+	// Connection.Start method frame (simplified)
+	// Method ID: Connection.Start = 10, 10 (class 10, method 10)
+	methodPayload := make([]byte, 4)                   // Minimal payload
+	binary.BigEndian.PutUint16(methodPayload[0:2], 10) // Class ID
+	binary.BigEndian.PutUint16(methodPayload[2:4], 10) // Method ID
+
+	sendAMQPFrame(s, 0, FrameMethod, methodPayload, conn)
+	return nil
+}

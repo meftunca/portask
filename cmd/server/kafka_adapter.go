@@ -8,11 +8,12 @@ import (
 
 	"github.com/meftunca/portask/pkg/kafka"
 	"github.com/meftunca/portask/pkg/queue"
+	"github.com/meftunca/portask/pkg/storage"
 	"github.com/meftunca/portask/pkg/types"
 )
 
 type KafkaStorageAdapter struct {
-	storage    StorageBackend
+	storage    storage.MessageStore
 	messageBus *queue.MessageBus
 }
 
@@ -89,37 +90,8 @@ func (k *KafkaStorageAdapter) DeleteTopic(topic string) error {
 	return k.storage.DeleteTopic(ctx, types.TopicName(topic))
 }
 
-type StorageBackend interface {
-	Store(context.Context, *types.PortaskMessage) error
-	Fetch(context.Context, types.TopicName, int32, int64, int) ([]*types.PortaskMessage, error)
-	CreateTopic(context.Context, *types.TopicInfo) error
-	DeleteTopic(context.Context, types.TopicName) error
-}
-
-// SimpleKafkaServer represents a basic Kafka server
-type SimpleKafkaServer struct {
-	addr    string
-	adapter *KafkaStorageAdapter
-}
-
-// NewKafkaServer creates a new Kafka server
-func NewKafkaServer(addr string, adapter *KafkaStorageAdapter) *SimpleKafkaServer {
-	return &SimpleKafkaServer{
-		addr:    addr,
-		adapter: adapter,
-	}
-}
-
-// Start starts the Kafka server
-func (s *SimpleKafkaServer) Start() error {
-	// For now, return nil - Kafka server implementation would go here
-	// In a full implementation, this would start a TCP server on s.addr
-	log.Printf("🔗 Kafka server would start on %s (placeholder)", s.addr)
-	return nil
-}
-
-// Stop stops the Kafka server
-func (s *SimpleKafkaServer) Stop() error {
-	log.Printf("🛑 Kafka server stopping")
-	return nil
+// NewKafkaServer creates a new Kafka server using the real kafka package implementation
+func NewKafkaServer(addr string, adapter *KafkaStorageAdapter) *kafka.KafkaServer {
+	// Use the real Kafka server from pkg/kafka
+	return kafka.NewKafkaServer(addr, adapter)
 }

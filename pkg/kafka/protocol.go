@@ -224,13 +224,16 @@ func NewKafkaProtocolHandler(store MessageStore, auth AuthProvider, metrics Metr
 // HandleConnection handles a Kafka client connection
 func (h *KafkaProtocolHandler) HandleConnection(conn net.Conn) {
 	defer conn.Close()
+	log.Printf("🔗 New Kafka connection from %s", conn.RemoteAddr())
 
 	for {
 		// Read request
 		request, err := h.readRequest(conn)
 		if err != nil {
-			if err != io.EOF {
-				fmt.Printf("Error reading request: %v\n", err)
+			if err == io.EOF {
+				log.Printf("🔌 Kafka client disconnected: %s", conn.RemoteAddr())
+			} else {
+				log.Printf("❌ Error reading Kafka request from %s: %v", conn.RemoteAddr(), err)
 			}
 			return
 		}
@@ -241,12 +244,17 @@ func (h *KafkaProtocolHandler) HandleConnection(conn net.Conn) {
 		}
 
 		start := time.Now()
+		log.Printf("🔍 Processing API %d request", request.Header.APIKey)
 
 		// Handle request
 		response, err := h.handleRequest(request)
 		if err != nil {
-			fmt.Printf("Error handling request: %v\n", err)
-			return
+			log.Printf("❌ Error handling Kafka request API %d: %v", request.Header.APIKey, err)
+			// Don't return here - send error response instead
+			response = &KafkaResponse{
+				Header: ResponseHeader{CorrelationID: request.Header.CorrelationID},
+				Body:   []byte{}, // Empty response
+			}
 		}
 
 		// Record latency
@@ -256,9 +264,11 @@ func (h *KafkaProtocolHandler) HandleConnection(conn net.Conn) {
 
 		// Write response
 		if err := h.writeResponse(conn, response); err != nil {
-			fmt.Printf("Error writing response: %v\n", err)
+			log.Printf("❌ Error writing Kafka response to %s: %v", conn.RemoteAddr(), err)
 			return
 		}
+
+		log.Printf("✅ Kafka API %d response sent to %s", request.Header.APIKey, conn.RemoteAddr())
 	}
 }
 
@@ -279,10 +289,13 @@ func (h *KafkaProtocolHandler) readRequest(conn net.Conn) (*KafkaRequest, error)
 	// Read message size (4 bytes)
 	sizeBytes := make([]byte, 4)
 	if _, err := io.ReadFull(conn, sizeBytes); err != nil {
+		log.Printf("❌ Failed to read message size: %v", err)
 		return nil, err
 	}
 
 	size := binary.BigEndian.Uint32(sizeBytes)
+	log.Printf("🔍 Kafka message size: %d bytes", size)
+
 	if size > 100*1024*1024 { // 100MB limit
 		return nil, fmt.Errorf("message too large: %d bytes", size)
 	}
@@ -290,6 +303,7 @@ func (h *KafkaProtocolHandler) readRequest(conn net.Conn) (*KafkaRequest, error)
 	// Read message body
 	messageBytes := make([]byte, size)
 	if _, err := io.ReadFull(conn, messageBytes); err != nil {
+		log.Printf("❌ Failed to read message body: %v", err)
 		return nil, err
 	}
 
@@ -305,20 +319,37 @@ func (h *KafkaProtocolHandler) readRequest(conn net.Conn) (*KafkaRequest, error)
 	var correlationID int32
 
 	if err := binary.Read(buf, binary.BigEndian, &apiKey); err != nil {
+		log.Printf("❌ Failed to read API key: %v", err)
 		return nil, err
 	}
 	if err := binary.Read(buf, binary.BigEndian, &apiVersion); err != nil {
+		log.Printf("❌ Failed to read API version: %v", err)
 		return nil, err
 	}
 	if err := binary.Read(buf, binary.BigEndian, &correlationID); err != nil {
+		log.Printf("❌ Failed to read correlation ID: %v", err)
 		return nil, err
 	}
 
-	// Read client ID
-	clientID, err := h.readString(buf)
-	if err != nil {
-		return nil, err
+	log.Printf("🔍 Kafka request: API=%d, Version=%d, Correlation=%d", apiKey, apiVersion, correlationID)
+	log.Printf("🔍 Remaining buffer size: %d bytes", buf.Len())
+
+	// Read client ID (handle empty/null client ID)
+	var clientID string
+	if buf.Len() >= 2 { // At least 2 bytes for string length
+		var err error
+		clientID, err = h.readString(buf)
+		if err != nil {
+			log.Printf("❌ Failed to read client ID: %v, remaining: %d bytes", err, buf.Len())
+			// Try to handle as null/empty client ID
+			clientID = ""
+		}
+	} else {
+		log.Printf("🔍 No client ID in request (too short)")
+		clientID = ""
 	}
+
+	log.Printf("🔍 Client ID: '%s'", clientID)
 
 	// Remaining bytes are the request body
 	bodySize := int64(len(messageBytes)) - (buf.Size() - int64(buf.Len()))
