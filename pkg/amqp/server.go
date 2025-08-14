@@ -136,6 +136,9 @@ func (s *EnhancedAMQPServer) handleConnection(conn net.Conn) {
 	}
 
 	for {
+		// Set read timeout for client responses
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+
 		// Read frame header (7 bytes)
 		head := make([]byte, 7)
 		n, err := conn.Read(head)
@@ -410,6 +413,8 @@ const (
 
 // sendConnectionStart sends AMQP Connection.Start frame
 func (s *EnhancedAMQPServer) sendConnectionStart(conn net.Conn) error {
+	log.Printf("📤 Sending Connection.Start frame to %s", conn.RemoteAddr())
+
 	// Connection.Start method frame (simplified)
 	// Method ID: Connection.Start = 10, 10 (class 10, method 10)
 	methodPayload := make([]byte, 4)                   // Minimal payload
@@ -417,5 +422,7 @@ func (s *EnhancedAMQPServer) sendConnectionStart(conn net.Conn) error {
 	binary.BigEndian.PutUint16(methodPayload[2:4], 10) // Method ID
 
 	sendAMQPFrame(s, 0, FrameMethod, methodPayload, conn)
+
+	log.Printf("✅ Connection.Start frame sent successfully")
 	return nil
 }

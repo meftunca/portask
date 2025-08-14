@@ -46,6 +46,8 @@ func (h *KafkaProtocolHandler) handleApiVersions(request *KafkaRequest) []byte {
 
 // handleMetadata handles METADATA requests
 func (h *KafkaProtocolHandler) handleMetadata(request *KafkaRequest) []byte {
+	log.Printf("🔍 Handling Metadata API request (API 3) - body size: %d bytes", len(request.Body))
+
 	var buf bytes.Buffer
 
 	// Parse request
@@ -54,25 +56,44 @@ func (h *KafkaProtocolHandler) handleMetadata(request *KafkaRequest) []byte {
 	// Read topics array
 	var topicCount int32
 	binary.Read(reqBuf, binary.BigEndian, &topicCount)
+	log.Printf("🔍 Metadata request - topicCount: %d", topicCount)
 
 	var requestedTopics []string
-	if topicCount > 0 {
+	if topicCount == -1 {
+		// Client requests all topics - provide a default topic
+		log.Printf("🔍 Client requesting all topics - providing default topic")
+		requestedTopics = []string{"test-topic"}
+	} else if topicCount > 0 {
 		for i := int32(0); i < topicCount; i++ {
 			topic, _ := h.readString(reqBuf)
 			requestedTopics = append(requestedTopics, topic)
+			log.Printf("🔍 Metadata request - topic[%d]: %s", i, topic)
 		}
+	} else {
+		// topicCount == 0 means no specific topics requested
+		log.Printf("🔍 No specific topics requested - providing default topic")
+		requestedTopics = []string{"test-topic"}
 	}
 
 	// Get metadata from store
+	log.Printf("🔍 Getting metadata for topics: %v", requestedTopics)
 	metadata, err := h.messageStore.GetTopicMetadata(requestedTopics)
 	if err != nil {
+		log.Printf("❌ Failed to get topic metadata: %v", err)
 		// Return error response
 		binary.Write(&buf, binary.BigEndian, int32(0))  // throttle time
 		binary.Write(&buf, binary.BigEndian, int32(0))  // broker count
 		binary.Write(&buf, binary.BigEndian, int32(-1)) // cluster id (null)
 		binary.Write(&buf, binary.BigEndian, int32(0))  // controller id
 		binary.Write(&buf, binary.BigEndian, int32(0))  // topic count
+		log.Printf("✅ Metadata API error response created - response size: %d bytes", buf.Len())
 		return buf.Bytes()
+	}
+
+	if metadata != nil {
+		log.Printf("✅ Got metadata for topic: %s with %d partitions", metadata.Name, len(metadata.Partitions))
+	} else {
+		log.Printf("⚠️ Got nil metadata")
 	}
 
 	// Build response
