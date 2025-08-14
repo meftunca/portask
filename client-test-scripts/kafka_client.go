@@ -16,9 +16,11 @@ func main() {
 
 	// Create a Kafka writer (producer)
 	writer := &kafka.Writer{
-		Addr:     kafka.TCP("localhost:9092"),
-		Topic:    "test-topic",
-		Balancer: &kafka.LeastBytes{},
+		Addr:        kafka.TCP("localhost:9092"),
+		Topic:       "test-topic",
+		Balancer:    &kafka.LeastBytes{},
+		Logger:      kafka.LoggerFunc(log.Printf), // Enable debug logging
+		ErrorLogger: kafka.LoggerFunc(log.Printf),
 	}
 	defer writer.Close()
 
