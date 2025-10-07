@@ -112,7 +112,7 @@ func runBatchTest(store *MockBatchStore, duration time.Duration, batchSize int, 
 	ctx := context.Background()
 	var count atomic.Int64
 	buffer := make([]*types.PortaskMessage, 0, batchSize)
-	
+
 	start := time.Now()
 
 	// Flush function
@@ -127,7 +127,7 @@ func runBatchTest(store *MockBatchStore, duration time.Duration, batchSize int, 
 	// Background ticker for time-based flush
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
-	
+
 	done := make(chan struct{})
 	go func() {
 		for {
@@ -165,4 +165,3 @@ func runBatchTest(store *MockBatchStore, duration time.Duration, batchSize int, 
 
 	return count.Load()
 }
-
