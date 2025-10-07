@@ -118,6 +118,11 @@ func NewDragonflyStore(config *storage.DragonflyConfig) (*DragonflyStore, error)
 	return store, nil
 }
 
+// GetClient returns the underlying Redis client for advanced operations (e.g., pipelining)
+func (d *DragonflyStore) GetClient() redis.UniversalClient {
+	return d.client
+}
+
 // Connect establishes connection to Dragonfly
 func (d *DragonflyStore) Connect(ctx context.Context) error {
 	d.connMutex.Lock()
