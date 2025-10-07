@@ -29,8 +29,8 @@ func NewKafkaServer(addr string, store MessageStore) *KafkaServer {
 	var transactionManager *TransactionManager
 
 	handler := NewKafkaProtocolHandlerWithCoordinators(
-		store, 
-		auth, 
+		store,
+		auth,
 		metrics,
 		groupCoordinator,
 		offsetManager,

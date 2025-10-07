@@ -2,12 +2,15 @@ package amqp
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/meftunca/portask/pkg/processor"
 )
 
 // Enhanced AMQP Server with RabbitMQ compatibility
@@ -15,7 +18,15 @@ type EnhancedAMQPServer struct {
 	addr        string
 	listener    net.Listener
 	running     bool
+	
+	// Core Portask components (NEW ARCHITECTURE)
+	processor  *processor.MessageProcessor
+	translator *AMQPTranslator
+	bridge     *ProcessorBridge
+	
+	// Legacy storage interface (to be deprecated)
 	store       MessageStore
+	
 	connections map[string]*Connection
 	exchanges   map[string]*Exchange
 	queues      map[string]*Queue
@@ -52,8 +63,16 @@ type TLSConfig struct {
 }
 
 func NewEnhancedAMQPServer(addr string, store MessageStore) *EnhancedAMQPServer {
+	// Create processor (this will be the SINGLE entry point for all messages)
+	proc := processor.NewMessageProcessor(processor.DefaultProcessorConfig())
+	translator := NewAMQPTranslator()
+	bridge := NewProcessorBridge(proc, store)
+	
 	return &EnhancedAMQPServer{
 		addr:        addr,
+		processor:   proc,
+		translator:  translator,
+		bridge:      bridge,
 		store:       store,
 		connections: make(map[string]*Connection),
 		exchanges:   make(map[string]*Exchange),
@@ -62,6 +81,14 @@ func NewEnhancedAMQPServer(addr string, store MessageStore) *EnhancedAMQPServer 
 }
 
 func (s *EnhancedAMQPServer) Start() error {
+	// Start processor
+	if s.processor != nil {
+		if err := s.processor.Start(context.Background()); err != nil {
+			return fmt.Errorf("failed to start processor: %w", err)
+		}
+		log.Printf("✅ Portask processor started for AMQP")
+	}
+
 	listener, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", s.addr, err)
@@ -90,6 +117,16 @@ func (s *EnhancedAMQPServer) Start() error {
 
 func (s *EnhancedAMQPServer) Stop() error {
 	s.running = false
+	
+	// Stop processor
+	if s.processor != nil {
+		if err := s.processor.Stop(); err != nil {
+			log.Printf("⚠️ Error stopping processor: %v", err)
+		} else {
+			log.Printf("✅ Portask processor stopped for AMQP")
+		}
+	}
+	
 	if s.listener != nil {
 		err := s.listener.Close()
 		if err != nil {

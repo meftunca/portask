@@ -316,8 +316,43 @@ func (h *KafkaProtocolHandler) handleFetch(request *KafkaRequest) []byte {
 			binary.Read(reqBuf, binary.BigEndian, &fetchOffset)
 			binary.Read(reqBuf, binary.BigEndian, &partitionMaxBytes)
 
-			// Fetch messages
-			messages, err := h.messageStore.ConsumeMessages(topic, partition, fetchOffset, partitionMaxBytes)
+			// ✅ NEW ARCHITECTURE: Kafka → Translator → Processor → Storage
+			var messages []*Message
+			var err error
+			
+			if h.bridge != nil && h.translator != nil {
+				// Use new architecture (Translator + Bridge)
+				log.Printf("🏗️ Using NEW architecture for Fetch: Translator → Bridge")
+				
+				// 1. Translate Kafka Fetch request to Portask fetch request
+				fetchReq, transErr := h.translator.TranslateFetch(topic, partition, fetchOffset, partitionMaxBytes)
+				if transErr != nil {
+					err = transErr
+					log.Printf("❌ Fetch translation failed for %s[%d]: %v", topic, partition, err)
+				} else {
+					// 2. Fetch through bridge
+					portaskMessages, fetchErr := h.bridge.FetchMessages(context.Background(), fetchReq)
+					if fetchErr != nil {
+						err = fetchErr
+						log.Printf("❌ Bridge fetch failed for %s[%d]: %v", topic, partition, err)
+					} else {
+						// 3. Convert Portask messages back to Kafka messages
+						messages = make([]*Message, 0, len(portaskMessages))
+						for _, pmsg := range portaskMessages {
+							messages = append(messages, &Message{
+								Offset: pmsg.Timestamp, // Use timestamp as offset
+								Key:    []byte(pmsg.Key),
+								Value:  pmsg.Payload,
+							})
+						}
+						log.Printf("✅ Fetched %d messages from %s[%d] via new architecture", len(messages), topic, partition)
+					}
+				}
+			} else {
+				// Legacy path (direct storage)
+				log.Printf("⚠️ Using LEGACY architecture for Fetch: Direct storage")
+				messages, err = h.messageStore.ConsumeMessages(topic, partition, fetchOffset, partitionMaxBytes)
+			}
 
 			// Write partition response
 			binary.Write(&buf, binary.BigEndian, partition)
