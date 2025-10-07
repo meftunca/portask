@@ -426,10 +426,147 @@ func NewKafkaProtocolHandlerWithCoordinators(
 	return handler
 }
 
+// handleDescribeGroups handles DESCRIBE_GROUPS requests
+func (h *KafkaProtocolHandler) handleDescribeGroups(request *KafkaRequest) []byte {
+	var buf bytes.Buffer
+	reqBuf := bytes.NewReader(request.Body)
+
+	// Read group IDs array
+	var groupCount int32
+	binary.Read(reqBuf, binary.BigEndian, &groupCount)
+
+	groupIDs := make([]string, groupCount)
+	for i := int32(0); i < groupCount; i++ {
+		groupID, _ := h.readString(reqBuf)
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	log.Printf("[Kafka] DescribeGroups: groups=%v", groupIDs)
+
+	// Call group coordinator
+	if h.groupCoordinator != nil {
+		descriptions := h.groupCoordinator.DescribeGroups(groupIDs)
+
+		// Response
+		binary.Write(&buf, binary.BigEndian, int32(0)) // throttle time
+		binary.Write(&buf, binary.BigEndian, int32(len(descriptions))) // group count
+
+		for _, desc := range descriptions {
+			binary.Write(&buf, binary.BigEndian, int16(0)) // error code
+			h.writeString(&buf, desc.GroupID)
+			h.writeString(&buf, desc.State)
+			h.writeString(&buf, desc.ProtocolType)
+			h.writeString(&buf, desc.Protocol)
+
+			// Members
+			binary.Write(&buf, binary.BigEndian, int32(len(desc.Members)))
+			for _, member := range desc.Members {
+				h.writeString(&buf, member.MemberID)
+				h.writeString(&buf, member.ClientID)
+				h.writeString(&buf, member.ClientHost)
+				h.writeBytes(&buf, member.Metadata)
+				h.writeBytes(&buf, member.Assignment)
+			}
+		}
+
+		return buf.Bytes()
+	}
+
+	// Fallback
+	binary.Write(&buf, binary.BigEndian, int32(0))
+	binary.Write(&buf, binary.BigEndian, int32(0))
+	return buf.Bytes()
+}
+
+// handleListGroups handles LIST_GROUPS requests
+func (h *KafkaProtocolHandler) handleListGroups(request *KafkaRequest) []byte {
+	var buf bytes.Buffer
+
+	log.Printf("[Kafka] ListGroups request")
+
+	// Call group coordinator
+	if h.groupCoordinator != nil {
+		groups := h.groupCoordinator.ListGroups()
+
+		// Response
+		binary.Write(&buf, binary.BigEndian, int32(0)) // throttle time
+		binary.Write(&buf, binary.BigEndian, int16(0)) // error code
+		binary.Write(&buf, binary.BigEndian, int32(len(groups))) // group count
+
+		for _, group := range groups {
+			h.writeString(&buf, group.GroupID)
+			h.writeString(&buf, group.ProtocolType)
+		}
+
+		return buf.Bytes()
+	}
+
+	// Fallback
+	binary.Write(&buf, binary.BigEndian, int32(0))
+	binary.Write(&buf, binary.BigEndian, int16(15)) // coordinator not available
+	binary.Write(&buf, binary.BigEndian, int32(0))
+	return buf.Bytes()
+}
+
+// handleInitProducerId handles INIT_PRODUCER_ID requests
+func (h *KafkaProtocolHandler) handleInitProducerId(request *KafkaRequest) []byte {
+	var buf bytes.Buffer
+	reqBuf := bytes.NewReader(request.Body)
+
+	// Read transactional ID (nullable)
+	transactionalID, _ := h.readString(reqBuf)
+	
+	// Read transaction timeout
+	var transactionTimeoutMs int32
+	binary.Read(reqBuf, binary.BigEndian, &transactionTimeoutMs)
+
+	log.Printf("[Kafka] InitProducerId: txnID=%s, timeout=%d", transactionalID, transactionTimeoutMs)
+
+	// Transaction manager support (stub for now)
+	_ = transactionalID // Use variable
+	_ = transactionTimeoutMs // Use variable
+
+	// Generate simple producer ID for non-transactional producers
+	producerID := time.Now().UnixNano()
+	
+	binary.Write(&buf, binary.BigEndian, int32(0))      // throttle time
+	binary.Write(&buf, binary.BigEndian, int16(0))      // no error
+	binary.Write(&buf, binary.BigEndian, producerID)    // producer ID
+	binary.Write(&buf, binary.BigEndian, int16(0))      // producer epoch
+
+	return buf.Bytes()
+}
+
+// handleAddPartitionsToTxn handles ADD_PARTITIONS_TO_TXN requests
+func (h *KafkaProtocolHandler) handleAddPartitionsToTxn(request *KafkaRequest) []byte {
+	var buf bytes.Buffer
+
+	log.Printf("[Kafka] AddPartitionsToTxn request")
+
+	// Simple success response (stub)
+	binary.Write(&buf, binary.BigEndian, int32(0)) // throttle time
+	binary.Write(&buf, binary.BigEndian, int32(0)) // topics count
+
+	return buf.Bytes()
+}
+
+// handleEndTxn handles END_TXN requests
+func (h *KafkaProtocolHandler) handleEndTxn(request *KafkaRequest) []byte {
+	var buf bytes.Buffer
+
+	log.Printf("[Kafka] EndTxn request")
+
+	// Simple success response (stub)
+	binary.Write(&buf, binary.BigEndian, int32(0)) // throttle time
+	binary.Write(&buf, binary.BigEndian, int16(0)) // no error
+
+	return buf.Bytes()
+}
+
 // registerExtendedHandlers registers the new handler functions
 func (h *KafkaProtocolHandler) registerExtendedHandlers() {
 	// These will be called from HandleRequest based on API key
-	log.Println("[Kafka] Extended handlers registered: FindCoordinator, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, OffsetCommit, OffsetFetch")
+	log.Println("[Kafka] Extended handlers registered: FindCoordinator, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, OffsetCommit, OffsetFetch, DescribeGroups, ListGroups, InitProducerId")
 }
 
 // Add fields to KafkaProtocolHandler

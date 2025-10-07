@@ -493,27 +493,8 @@ func (h *KafkaProtocolHandler) createErrorResponse(errorCode int16) []byte {
 // TOPLU EKLENEN KAFKA HANDLER İSKELETLERİ
 // =====================
 
-// Consumer Group Management Handlers
-// JoinGroup, SyncGroup, Heartbeat implementations moved to handlers_extended.go
-func (h *KafkaProtocolHandler) handleDescribeGroups(request *KafkaRequest) []byte {
-	// TODO: Implement DescribeGroups response
-	return h.createErrorResponse(UnsupportedVersion)
-}
-// OffsetCommit, OffsetFetch, FindCoordinator implementations moved to handlers_extended.go
-
-// Transaction Handlers
-func (h *KafkaProtocolHandler) handleInitProducerId(request *KafkaRequest) []byte {
-	// TODO: Implement InitProducerId logic
-	return h.createErrorResponse(UnsupportedVersion)
-}
-func (h *KafkaProtocolHandler) handleAddPartitionsToTxn(request *KafkaRequest) []byte {
-	// TODO: Implement AddPartitionsToTxn logic
-	return h.createErrorResponse(UnsupportedVersion)
-}
-func (h *KafkaProtocolHandler) handleEndTxn(request *KafkaRequest) []byte {
-	// TODO: Implement EndTxn logic
-	return h.createErrorResponse(UnsupportedVersion)
-}
+// Consumer Group Management Handlers moved to handlers_extended.go
+// Transaction Handlers moved to handlers_extended.go
 
 // Schema Registry Handler (iskele)
 func (h *KafkaProtocolHandler) handleSchemaRegistry(request *KafkaRequest) []byte {
