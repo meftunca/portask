@@ -35,8 +35,8 @@ func NewKafkaServer(addr string, store MessageStore) *KafkaServer {
 	}
 
 	handler := NewKafkaProtocolHandlerWithCoordinators(
-		store, 
-		auth, 
+		store,
+		auth,
 		metrics,
 		groupCoordinator,
 		offsetManager,
@@ -78,7 +78,7 @@ func (s *KafkaServer) Start() error {
 // Stop stops the Kafka server
 func (s *KafkaServer) Stop() error {
 	s.running = false
-	
+
 	// Stop processor
 	if s.handler.processor != nil {
 		if err := s.handler.processor.Stop(); err != nil {
@@ -87,7 +87,7 @@ func (s *KafkaServer) Stop() error {
 			log.Printf("✅ Portask processor stopped")
 		}
 	}
-	
+
 	if s.listener != nil {
 		return s.listener.Close()
 	}
