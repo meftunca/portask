@@ -74,7 +74,7 @@ import (
 type ProtocolTranslator interface {
     // Translate external message to Portask message
     Translate(externalMsg interface{}) (*types.PortaskMessage, error)
-    
+
     // Translate Portask response to external protocol
     TranslateResponse(portaskResp *types.PortaskResponse) (interface{}, error)
 }
@@ -89,7 +89,7 @@ package kafka
 import (
     "fmt"
     "time"
-    
+
     "github.com/meftunca/portask/pkg/protocol"
     "github.com/meftunca/portask/pkg/types"
 )
@@ -110,7 +110,7 @@ func (t *KafkaTranslator) TranslateProduce(
     key []byte,
     value []byte,
 ) (*types.PortaskMessage, error) {
-    
+
     return &types.PortaskMessage{
         ID:        types.MessageID(fmt.Sprintf("kafka-%d", time.Now().UnixNano())),
         Topic:     types.TopicName(topic),
@@ -131,14 +131,14 @@ func (t *KafkaTranslator) TranslateProduceResponse(
     offset int64,
     err error,
 ) *KafkaProduceResponse {
-    
+
     if err != nil {
         return &KafkaProduceResponse{
             ErrorCode: UnknownError,
             Offset:    -1,
         }
     }
-    
+
     return &KafkaProduceResponse{
         ErrorCode: NoError,
         Offset:    offset,
@@ -152,7 +152,7 @@ func (t *KafkaTranslator) TranslateFetch(
     offset int64,
     maxBytes int32,
 ) (*types.FetchRequest, error) {
-    
+
     return &types.FetchRequest{
         Topic:     types.TopicName(topic),
         Partition: partition,
@@ -171,7 +171,7 @@ package amqp
 import (
     "fmt"
     "time"
-    
+
     "github.com/meftunca/portask/pkg/types"
 )
 
@@ -190,13 +190,13 @@ func (t *AMQPTranslator) TranslatePublish(
     body []byte,
     properties map[string]interface{},
 ) (*types.PortaskMessage, error) {
-    
+
     // Convert AMQP routing to Portask topic/partition
     topic := exchange
     if topic == "" {
         topic = "default"
     }
-    
+
     return &types.PortaskMessage{
         ID:        types.MessageID(fmt.Sprintf("amqp-%d", time.Now().UnixNano())),
         Topic:     types.TopicName(topic),
@@ -218,7 +218,7 @@ func (t *AMQPTranslator) TranslatePublish(
 func (t *AMQPTranslator) TranslateDeliver(
     portaskMsg *types.PortaskMessage,
 ) (*AMQPDelivery, error) {
-    
+
     return &AMQPDelivery{
         ConsumerTag:  "portask-consumer",
         DeliveryTag:  uint64(portaskMsg.Timestamp),
@@ -234,6 +234,7 @@ func (t *AMQPTranslator) TranslateDeliver(
 ### Phase 4: Refactor Handlers
 
 **Before (Wrong):**
+
 ```go
 // pkg/kafka/handlers.go
 func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
@@ -244,24 +245,25 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 ```
 
 **After (Correct):**
+
 ```go
 // pkg/kafka/handlers.go
 func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
     // Parse Kafka request
     topic, partition, key, value := parseKafkaProduceRequest(request)
-    
+
     // ✅ Translate to Portask message
     portaskMsg, err := h.translator.TranslateProduce(topic, partition, key, value)
     if err != nil {
         return h.buildErrorResponse(err)
     }
-    
+
     // ✅ Send to Portask core for processing
     offset, err := h.portaskCore.ProcessMessage(portaskMsg)
     if err != nil {
         return h.translator.TranslateProduceResponse(0, err)
     }
-    
+
     // ✅ Translate response back to Kafka format
     response := h.translator.TranslateProduceResponse(offset, nil)
     return h.encodeKafkaResponse(response)
@@ -381,28 +383,28 @@ func (p *MessageProcessor) ProcessMessage(msg *types.PortaskMessage) (int64, err
         p.metrics.validationErrors++
         return 0, err
     }
-    
+
     // 2. Encode with CodecManager
     encoded, err := p.codecManager.Encode(msg)
     if err != nil {
         p.metrics.encodingErrors++
         return 0, err
     }
-    
+
     // 3. Add protocol frame (magic, version, CRC32)
     frame := p.buildProtocolFrame(encoded)
-    
+
     // 4. Store
     offset, err := p.storage.Store(frame)
     if err != nil {
         p.metrics.storageErrors++
         return 0, err
     }
-    
+
     // 5. Update metrics
     p.metrics.totalMessages++
     p.metrics.UpdateProcessTime(time.Since(start))
-    
+
     return offset, nil
 }
 ```
@@ -425,12 +427,12 @@ func (p *MessageProcessor) ProcessMessage(msg *types.PortaskMessage) (int64, err
 func TestKafkaUsesPortaskCore(t *testing.T) {
     // Send via Kafka
     kafkaClient.Produce("test", []byte("data"))
-    
+
     // Verify Portask protocol used
     stored := storage.Get(...)
     assert.Contains(stored, PortaskMagicNumber)
     assert.Contains(stored, CRC32)
-    
+
     // Verify metrics
     assert.Equal(1, portask.metrics.totalMessages)
     assert.Equal(1, portask.metrics.byProtocol["kafka"])
@@ -439,12 +441,12 @@ func TestKafkaUsesPortaskCore(t *testing.T) {
 func TestAMQPUsesPortaskCore(t *testing.T) {
     // Send via AMQP
     amqpClient.Publish("exchange", "key", []byte("data"))
-    
+
     // Verify same protocol
     stored := storage.Get(...)
     assert.Contains(stored, PortaskMagicNumber)
     assert.Contains(stored, CRC32)
-    
+
     // Verify metrics
     assert.Equal(1, portask.metrics.totalMessages)
     assert.Equal(1, portask.metrics.byProtocol["amqp"])
@@ -500,12 +502,12 @@ type MigrationMetrics struct {
     oldPathMessages   int64
     oldPathLatency    time.Duration
     oldPathErrors     int64
-    
+
     // New path (via Portask core)
     newPathMessages   int64
     newPathLatency    time.Duration
     newPathErrors     int64
-    
+
     // Validation
     consistencyChecks int64
     inconsistencies   int64
@@ -561,12 +563,14 @@ type MigrationMetrics struct {
 ### What We're Fixing
 
 ❌ **Before:** Kafka and AMQP do their own thing
+
 - Direct storage access
 - No protocol validation
 - Duplicate business logic
 - Inconsistent metrics
 
 ✅ **After:** Portask is the boss
+
 - Protocol translators ONLY translate
 - ALL logic in Portask core
 - Single write path
@@ -582,4 +586,3 @@ type MigrationMetrics struct {
 **Priority:** High  
 **Effort:** 1 sprint (7 days)  
 **Impact:** Massive improvement in maintainability and consistency
-
