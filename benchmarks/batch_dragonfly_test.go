@@ -317,4 +317,3 @@ func buildOptimizedProduceRequestWithPayload(topic string, partition int32, payl
 
 	return request
 }
-
