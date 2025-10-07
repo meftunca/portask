@@ -22,7 +22,7 @@ func TestAsyncBenchmark(t *testing.T) {
 
 	// Create optimized store
 	store := NewMockThroughputStore()
-	
+
 	// Start Kafka server
 	server := kafka.NewKafkaServer(":9100", store)
 	if err := server.Start(); err != nil {
@@ -47,12 +47,12 @@ func TestAsyncBenchmark(t *testing.T) {
 	fmt.Printf("  ├─────────────┼──────────────┼──────────────┼─────────────┤\n")
 
 	syncBaseline := 900.0 // From previous sync test
-	
+
 	pipelineSizes := []int{1, 5, 10, 20, 50}
 	for _, pipelineSize := range pipelineSizes {
 		throughput := runPipelineBenchmark(t, ":9100", 8, pipelineSize, 5*time.Second)
 		improvement := ((throughput - syncBaseline*8) / (syncBaseline * 8)) * 100
-		
+
 		status := ""
 		if improvement > 500 {
 			status = "🔥"
@@ -63,7 +63,7 @@ func TestAsyncBenchmark(t *testing.T) {
 		} else {
 			status = "📊"
 		}
-		
+
 		fmt.Printf("  │ %11d │ %10.0f/s │ %10.0f/s │ %9.0f%% %s│\n",
 			pipelineSize,
 			throughput,
@@ -85,7 +85,7 @@ func TestAsyncBenchmark(t *testing.T) {
 	for _, batchSize := range batchSizes {
 		throughput := runBatchBenchmark(t, ":9100", 8, batchSize, 5*time.Second)
 		improvement := ((throughput - syncBaseline*8) / (syncBaseline * 8)) * 100
-		
+
 		status := ""
 		if improvement > 1000 {
 			status = "🔥"
@@ -96,7 +96,7 @@ func TestAsyncBenchmark(t *testing.T) {
 		} else {
 			status = "📊"
 		}
-		
+
 		fmt.Printf("  │ %11d │ %10.0f/s │ %10.0f/s │ %9.0f%% %s│\n",
 			batchSize,
 			throughput,
@@ -130,7 +130,7 @@ func TestAsyncBenchmark(t *testing.T) {
 		throughput := runCombinedBenchmark(t, ":9100", config.producers, config.pipeline, config.batch, 5*time.Second)
 		baseline := syncBaseline * float64(config.producers)
 		multiplier := throughput / baseline
-		
+
 		status := ""
 		if multiplier > 100 {
 			status = "🔥🔥"
@@ -141,7 +141,7 @@ func TestAsyncBenchmark(t *testing.T) {
 		} else {
 			status = "⚡"
 		}
-		
+
 		fmt.Printf("  │ %-12s │ %10.0f/s │ %10.0f/s │ %10.1fx %s│\n",
 			config.name,
 			throughput,
@@ -155,7 +155,7 @@ func TestAsyncBenchmark(t *testing.T) {
 
 	// Peak performance test
 	peakThroughput := runCombinedBenchmark(t, ":9100", 16, 50, 500, 10*time.Second)
-	
+
 	fmt.Printf("╔══════════════════════════════════════════════════════════════════╗\n")
 	fmt.Printf("║  📈 ASYNC PERFORMANCE SUMMARY                                    ║\n")
 	fmt.Printf("╠══════════════════════════════════════════════════════════════════╣\n")
@@ -164,7 +164,7 @@ func TestAsyncBenchmark(t *testing.T) {
 	fmt.Printf("║  Best Batch (500x, 8 prod):       %7.0f msgs/sec              ║\n", runBatchBenchmark(t, ":9100", 8, 500, 3*time.Second))
 	fmt.Printf("║  Peak Combined (16 prod):         %7.0f msgs/sec              ║\n", peakThroughput)
 	fmt.Printf("╠══════════════════════════════════════════════════════════════════╣\n")
-	
+
 	peakMultiplier := peakThroughput / (syncBaseline * 16)
 	fmt.Printf("║  Peak Improvement:                 %7.1fx vs sync             ║\n", peakMultiplier)
 	fmt.Printf("║  Estimated Real Production:        %7.0fK msgs/sec           ║\n", peakThroughput/1000)
@@ -374,4 +374,3 @@ func runCombinedBenchmark(t *testing.T, addr string, producers int, pipelineDept
 
 	return float64(count.Load()) / elapsed.Seconds()
 }
-
