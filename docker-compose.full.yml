@@ -1,0 +1,168 @@
+version: "3.8"
+
+services:
+  # Main Portask Server
+  portask:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: portask-server
+    ports:
+      - "8080:8080" # HTTP API
+      - "5672:5672" # AMQP/RabbitMQ
+      - "9092:9092" # Kafka
+      - "9090:9090" # Metrics
+    environment:
+      - SERVER_ENV=production
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret}
+      - STORAGE_TYPE=dragonfly
+      - DRAGONFLY_HOST=dragonfly
+      - DRAGONFLY_PORT=6379
+      - ENABLE_RATE_LIMIT=true
+      - RATE_LIMIT_RPS=1000
+      - METRICS_ENABLED=true
+      - LOG_LEVEL=info
+    depends_on:
+      dragonfly:
+        condition: service_healthy
+    networks:
+      - portask-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Dragonfly Storage
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    container_name: portask-dragonfly
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly-data:/data
+    command: [
+        "dragonfly",
+        "--logtostderr",
+        "--maxmemory=4GB",
+        "--snapshot_cron=0 */6 * * *", # Snapshot every 6 hours
+        "--cache_mode=false",
+      ]
+    networks:
+      - portask-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: portask-prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    networks:
+      - portask-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9090/-/healthy",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: portask-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    volumes:
+      - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - grafana-data:/var/lib/grafana
+    networks:
+      - portask-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Admin UI (Optional)
+  admin-ui:
+    build:
+      context: ./admin_ui
+      dockerfile: Dockerfile
+    container_name: portask-admin-ui
+    ports:
+      - "3001:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - REACT_APP_WS_URL=ws://localhost:8080
+    networks:
+      - portask-network
+    depends_on:
+      - portask
+    restart: unless-stopped
+
+networks:
+  portask-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  dragonfly-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
