@@ -45,12 +45,12 @@ func TestRealisticAsync(t *testing.T) {
 	fmt.Printf("  ├─────────────┼──────────────┼──────────────┼─────────────┤\n")
 
 	syncBaseline := 900.0
-	
+
 	pipelineSizes := []int{1, 10, 50}
 	for _, pipelineSize := range pipelineSizes {
 		requestRate := measureRealRequestRate(t, ":9101", 8, pipelineSize, 5*time.Second)
 		improvement := ((requestRate - syncBaseline*8) / (syncBaseline * 8)) * 100
-		
+
 		status := ""
 		if improvement > 5000 {
 			status = "🔥"
@@ -59,7 +59,7 @@ func TestRealisticAsync(t *testing.T) {
 		} else {
 			status = "📊"
 		}
-		
+
 		fmt.Printf("  │ %11d │ %10.0f/s │ %10.0f/s │ %9.0f%% %s│\n",
 			pipelineSize,
 			requestRate,
@@ -73,7 +73,7 @@ func TestRealisticAsync(t *testing.T) {
 
 	// Test 2: Projection with different batch sizes
 	peakRequestRate := measureRealRequestRate(t, ":9101", 16, 50, 5*time.Second)
-	
+
 	fmt.Printf("  📦 Test 2: Theoretical Throughput (Batch Projections)\n")
 	fmt.Printf("  ┌─────────────┬──────────────┬──────────────┬─────────────┐\n")
 	fmt.Printf("  │ Batch Size  │ Theoretical  │ Actual Req/s │ Reality     │\n")
@@ -82,7 +82,7 @@ func TestRealisticAsync(t *testing.T) {
 	batchSizes := []int{1, 10, 50, 100, 500}
 	for _, batchSize := range batchSizes {
 		theoretical := peakRequestRate * float64(batchSize)
-		
+
 		fmt.Printf("  │ %11d │ %10.0fK  │ %10.0fK  │ %9dx    │\n",
 			batchSize,
 			theoretical/1000,
@@ -117,7 +117,7 @@ func TestRealisticAsync(t *testing.T) {
 	realThroughput := peakRequestRate
 	theoretical100 := realThroughput * 100
 	theoretical500 := realThroughput * 500
-	
+
 	fmt.Printf("  🎯 GERÇEKÇI PRODUCTION TAHMINI:\n")
 	fmt.Printf("     Network üzerinden: %7.0f request/sec (GERÇEK)\n", realThroughput)
 	fmt.Printf("     With batch=100:    %7.0fK msgs/sec (realistic)\n", theoretical100/1000)
@@ -128,7 +128,7 @@ func TestRealisticAsync(t *testing.T) {
 }
 
 func measureRealRequestRate(t *testing.T, addr string, producers int, pipelineDepth int, duration time.Duration) float64 {
-	var requestCount atomic.Int64  // Gerçek request sayısı!
+	var requestCount atomic.Int64 // Gerçek request sayısı!
 	var responseCount atomic.Int64
 	var errors atomic.Int32
 	var wg sync.WaitGroup
@@ -166,7 +166,7 @@ func measureRealRequestRate(t *testing.T, addr string, producers int, pipelineDe
 							if _, err := conn.Write(request); err != nil {
 								return
 							}
-							requestCount.Add(1)  // Her GERÇEK request için +1
+							requestCount.Add(1) // Her GERÇEK request için +1
 						}
 					}
 				}
@@ -198,4 +198,3 @@ func measureRealRequestRate(t *testing.T, addr string, producers int, pipelineDe
 	// GERÇEK request rate'i döndür (projection YOK!)
 	return float64(requestCount.Load()) / elapsed.Seconds()
 }
-
