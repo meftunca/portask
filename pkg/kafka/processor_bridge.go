@@ -19,7 +19,7 @@ type ProcessorBridge struct {
 // NewProcessorBridge creates a new processor bridge
 func NewProcessorBridge(proc *processor.MessageProcessor, storage MessageStore) *ProcessorBridge {
 	// Create storage adapter for batch writing
-	storageAdapter := &KafkaStorageAdapter{storage: storage}
+	storageAdapter := &KafkaStorageAdapter{Storage: storage}
 	
 	// Create batch writer
 	batchWriter := processor.NewBatchWriter(storageAdapter, processor.DefaultBatchWriterConfig())
@@ -82,14 +82,14 @@ func (pb *ProcessorBridge) FetchMessages(ctx context.Context, req *types.FetchRe
 
 // KafkaStorageAdapter adapts MessageStore to processor.StorageBackend interface
 type KafkaStorageAdapter struct {
-	storage MessageStore
+	Storage MessageStore // Exported for external use
 }
 
 // StoreBatch implements processor.StorageBackend interface
 func (ksa *KafkaStorageAdapter) StoreBatch(ctx context.Context, batch *types.MessageBatch) error {
 	// Write each message in the batch to storage
 	for _, msg := range batch.Messages {
-		_, err := ksa.storage.ProduceMessage(
+		_, err := ksa.Storage.ProduceMessage(
 			string(msg.Topic),
 			msg.Partition,
 			[]byte(msg.Key),
