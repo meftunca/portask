@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -51,6 +52,14 @@ func NewKafkaServer(addr string, store MessageStore) *KafkaServer {
 
 // Start starts the Kafka server
 func (s *KafkaServer) Start() error {
+	// Start processor
+	if s.handler.processor != nil {
+		if err := s.handler.processor.Start(context.Background()); err != nil {
+			return fmt.Errorf("failed to start processor: %w", err)
+		}
+		log.Printf("✅ Portask processor started")
+	}
+
 	listener, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", s.addr, err)
@@ -69,6 +78,16 @@ func (s *KafkaServer) Start() error {
 // Stop stops the Kafka server
 func (s *KafkaServer) Stop() error {
 	s.running = false
+	
+	// Stop processor
+	if s.handler.processor != nil {
+		if err := s.handler.processor.Stop(); err != nil {
+			log.Printf("⚠️ Error stopping processor: %v", err)
+		} else {
+			log.Printf("✅ Portask processor stopped")
+		}
+	}
+	
 	if s.listener != nil {
 		return s.listener.Close()
 	}

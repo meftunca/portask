@@ -36,6 +36,14 @@ const (
 // MessageHeaders represents custom message headers
 type MessageHeaders map[string]interface{}
 
+// FetchRequest represents a request to fetch messages
+type FetchRequest struct {
+	Topic     TopicName
+	Partition int32
+	Offset    int64
+	Limit     int
+}
+
 // PortaskMessage represents the core message structure optimized for performance
 type PortaskMessage struct {
 	// Core fields (most frequently accessed)
@@ -45,9 +53,10 @@ type PortaskMessage struct {
 	Timestamp int64     `cbor:"ts" json:"timestamp" msgpack:"ts"` // Unix nanoseconds for precision
 
 	// Optional fields (less frequently accessed)
-	Headers  MessageHeaders  `cbor:"h,omitempty" json:"headers,omitempty" msgpack:"h,omitempty"`
-	Priority MessagePriority `cbor:"pr,omitempty" json:"priority,omitempty" msgpack:"pr,omitempty"`
-	Status   MessageStatus   `cbor:"st,omitempty" json:"status,omitempty" msgpack:"st,omitempty"`
+	Headers  MessageHeaders    `cbor:"h,omitempty" json:"headers,omitempty" msgpack:"h,omitempty"`
+	Metadata map[string]string `cbor:"m,omitempty" json:"metadata,omitempty" msgpack:"m,omitempty"` // Protocol metadata
+	Priority MessagePriority   `cbor:"pr,omitempty" json:"priority,omitempty" msgpack:"pr,omitempty"`
+	Status   MessageStatus     `cbor:"st,omitempty" json:"status,omitempty" msgpack:"st,omitempty"`
 
 	// Routing and delivery
 	Partition    int32     `cbor:"part,omitempty" json:"partition,omitempty" msgpack:"part,omitempty"`

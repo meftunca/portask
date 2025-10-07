@@ -9,14 +9,25 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/meftunca/portask/pkg/processor"
 )
 
 // Kafka wire protocol implementation for Portask compatibility
 // This allows Kafka clients to connect to Portask seamlessly
 
 // KafkaProtocolHandler handles Kafka wire protocol
+// It acts as a TRANSLATOR between Kafka wire protocol and Portask core
 type KafkaProtocolHandler struct {
-	messageStore       MessageStore
+	// Core Portask components (NEW ARCHITECTURE)
+	processor  *processor.MessageProcessor
+	translator *KafkaTranslator
+	bridge     *ProcessorBridge // Bridge between translator and processor
+
+	// Legacy storage interface (to be deprecated)
+	messageStore MessageStore
+
+	// Support components
 	authProvider       AuthProvider
 	metricsCollector   MetricsCollector
 	groupCoordinator   *GroupCoordinator
@@ -218,7 +229,15 @@ type User struct {
 
 // NewKafkaProtocolHandler creates a new Kafka protocol handler (legacy, use NewKafkaProtocolHandlerWithCoordinators)
 func NewKafkaProtocolHandler(store MessageStore, auth AuthProvider, metrics MetricsCollector) *KafkaProtocolHandler {
+	// Create processor (this will be the SINGLE entry point for all messages)
+	proc := processor.NewMessageProcessor(processor.DefaultProcessorConfig())
+	translator := NewKafkaTranslator()
+	bridge := NewProcessorBridge(proc, store)
+	
 	return &KafkaProtocolHandler{
+		processor:        proc,
+		translator:       translator,
+		bridge:           bridge,
 		messageStore:     store,
 		authProvider:     auth,
 		metricsCollector: metrics,
@@ -295,7 +314,7 @@ func (h *KafkaProtocolHandler) readRequest(conn net.Conn) (*KafkaRequest, error)
 	// Use buffer pool for size reading
 	sizeBuf := GetBuffer(4)
 	sizeBytes := (*sizeBuf)[:4]
-	
+
 	if _, err := io.ReadFull(conn, sizeBytes); err != nil {
 		log.Printf("❌ Failed to read message size: %v", err)
 		PutBuffer(sizeBuf)
@@ -313,7 +332,7 @@ func (h *KafkaProtocolHandler) readRequest(conn net.Conn) (*KafkaRequest, error)
 	// Use buffer pool for message body
 	msgBuf := GetBuffer(int(size))
 	messageBytes := (*msgBuf)[:size]
-	
+
 	if _, err := io.ReadFull(conn, messageBytes); err != nil {
 		log.Printf("❌ Failed to read message body: %v", err)
 		PutBuffer(msgBuf)
@@ -398,7 +417,7 @@ func (h *KafkaProtocolHandler) writeResponse(conn net.Conn, response *KafkaRespo
 
 	// Write message size + message
 	responseBytes := buf.Bytes()
-	
+
 	// Use buffer pool for size bytes
 	sizeBuf := GetBuffer(4)
 	sizeBytes := (*sizeBuf)[:4]
@@ -495,7 +514,6 @@ func (h *KafkaProtocolHandler) readString(buf *bytes.Reader) (string, error) {
 
 	return string(str), nil
 }
-
 
 func (h *KafkaProtocolHandler) createErrorResponse(errorCode int16) []byte {
 	var buf bytes.Buffer

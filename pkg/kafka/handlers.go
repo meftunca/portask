@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"log"
 )
@@ -204,12 +205,36 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 			binary.Read(reqBuf, binary.BigEndian, &messageSetSize)
 			log.Printf("🔍 Produce request - partition %d, messageSetSize: %d", partition, messageSetSize)
 
-			// Read messages (simplified - just skip for now)
+			// Read messages
 			messageSet := make([]byte, messageSetSize)
 			reqBuf.Read(messageSet)
 
-			// For demo, just return success
-			offset, err := h.messageStore.ProduceMessage(topic, partition, nil, messageSet)
+			// ✅ NEW ARCHITECTURE: Kafka → Translator → Processor → Storage
+			var offset int64
+			var err error
+			
+			if h.bridge != nil {
+				// Use new architecture (Translator + Processor + Storage)
+				log.Printf("🏗️ Using NEW architecture: Translator → Processor → Storage")
+				
+				// 1. Translate Kafka wire protocol to Portask message
+				portaskMsg, transErr := h.translator.TranslateProduce(topic, partition, nil, messageSet)
+				if transErr != nil {
+					err = transErr
+					log.Printf("❌ Translation failed for %s[%d]: %v", topic, partition, err)
+				} else {
+					// 2. Process and store through bridge
+					offset, err = h.bridge.ProduceMessage(context.Background(), portaskMsg)
+					if err != nil {
+						log.Printf("❌ Bridge failed for %s[%d]: %v", topic, partition, err)
+					}
+				}
+			} else {
+				// Legacy path (direct storage)
+				log.Printf("⚠️ Using LEGACY architecture: Direct storage")
+				offset, err = h.messageStore.ProduceMessage(topic, partition, nil, messageSet)
+			}
+			
 			if err != nil {
 				log.Printf("❌ Failed to produce message to %s[%d]: %v", topic, partition, err)
 			} else {

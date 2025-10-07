@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"log"
 	"time"
+
+	"github.com/meftunca/portask/pkg/processor"
 )
 
 // Extended handlers for consumer groups, offsets, and transactions
@@ -27,11 +29,11 @@ func (h *KafkaProtocolHandler) handleFindCoordinator(request *KafkaRequest) []by
 	log.Printf("[Kafka] FindCoordinator: key=%s, type=%d", coordinatorKey, coordinatorType)
 
 	// Response
-	binary.Write(&buf, binary.BigEndian, int32(0))  // throttle time
-	binary.Write(&buf, binary.BigEndian, int16(0))  // error code: no error
-	binary.Write(&buf, binary.BigEndian, int16(0))  // error message (null)
-	binary.Write(&buf, binary.BigEndian, int32(0))  // node id
-	h.writeString(&buf, "localhost")                // host
+	binary.Write(&buf, binary.BigEndian, int32(0))    // throttle time
+	binary.Write(&buf, binary.BigEndian, int16(0))    // error code: no error
+	binary.Write(&buf, binary.BigEndian, int16(0))    // error message (null)
+	binary.Write(&buf, binary.BigEndian, int32(0))    // node id
+	h.writeString(&buf, "localhost")                  // host
 	binary.Write(&buf, binary.BigEndian, int32(9092)) // port
 
 	return buf.Bytes()
@@ -44,17 +46,17 @@ func (h *KafkaProtocolHandler) handleJoinGroup(request *KafkaRequest) []byte {
 
 	// Parse request
 	groupID, _ := h.readString(reqBuf)
-	
+
 	var sessionTimeout int32
 	binary.Read(reqBuf, binary.BigEndian, &sessionTimeout)
-	
+
 	var rebalanceTimeout int32
 	binary.Read(reqBuf, binary.BigEndian, &rebalanceTimeout)
-	
+
 	memberID, _ := h.readString(reqBuf)
 	protocolType, _ := h.readString(reqBuf)
 
-	log.Printf("[Kafka] JoinGroup: group=%s, member=%s, sessionTimeout=%d", 
+	log.Printf("[Kafka] JoinGroup: group=%s, member=%s, sessionTimeout=%d",
 		groupID, memberID, sessionTimeout)
 
 	// Call group coordinator
@@ -121,10 +123,10 @@ func (h *KafkaProtocolHandler) handleSyncGroup(request *KafkaRequest) []byte {
 
 	// Parse request
 	groupID, _ := h.readString(reqBuf)
-	
+
 	var generationID int32
 	binary.Read(reqBuf, binary.BigEndian, &generationID)
-	
+
 	memberID, _ := h.readString(reqBuf)
 
 	// Read group assignments (only leader sends these)
@@ -177,10 +179,10 @@ func (h *KafkaProtocolHandler) handleHeartbeat(request *KafkaRequest) []byte {
 
 	// Parse request
 	groupID, _ := h.readString(reqBuf)
-	
+
 	var generationID int32
 	binary.Read(reqBuf, binary.BigEndian, &generationID)
-	
+
 	memberID, _ := h.readString(reqBuf)
 
 	log.Printf("[Kafka] Heartbeat: group=%s, member=%s, gen=%d", groupID, memberID, generationID)
@@ -255,12 +257,11 @@ func (h *KafkaProtocolHandler) handleOffsetCommit(request *KafkaRequest) []byte 
 
 	// Parse request
 	groupID, _ := h.readString(reqBuf)
-	
+
 	var generationID int32
 	binary.Read(reqBuf, binary.BigEndian, &generationID)
-	
-	
-		// Read topics
+
+	// Read topics
 	var topicCount int32
 	binary.Read(reqBuf, binary.BigEndian, &topicCount)
 
@@ -270,17 +271,17 @@ func (h *KafkaProtocolHandler) handleOffsetCommit(request *KafkaRequest) []byte 
 	if h.offsetManager != nil {
 		for i := int32(0); i < topicCount; i++ {
 			topicName, _ := h.readString(reqBuf)
-			
+
 			var partitionCount int32
 			binary.Read(reqBuf, binary.BigEndian, &partitionCount)
 
 			for j := int32(0); j < partitionCount; j++ {
 				var partition int32
 				binary.Read(reqBuf, binary.BigEndian, &partition)
-				
+
 				var offset int64
 				binary.Read(reqBuf, binary.BigEndian, &offset)
-				
+
 				metadata, _ := h.readString(reqBuf)
 
 				// Commit offset
@@ -292,7 +293,7 @@ func (h *KafkaProtocolHandler) handleOffsetCommit(request *KafkaRequest) []byte 
 		}
 
 		// Success response
-		binary.Write(&buf, binary.BigEndian, int32(0))      // throttle time
+		binary.Write(&buf, binary.BigEndian, int32(0))          // throttle time
 		binary.Write(&buf, binary.BigEndian, int32(topicCount)) // topics
 
 		// Write empty errors for all topics
@@ -318,7 +319,7 @@ func (h *KafkaProtocolHandler) handleOffsetFetch(request *KafkaRequest) []byte {
 
 	// Parse request
 	groupID, _ := h.readString(reqBuf)
-	
+
 	// Read topics
 	var topicCount int32
 	binary.Read(reqBuf, binary.BigEndian, &topicCount)
@@ -333,7 +334,7 @@ func (h *KafkaProtocolHandler) handleOffsetFetch(request *KafkaRequest) []byte {
 
 		for i := int32(0); i < topicCount; i++ {
 			topicName, _ := h.readString(reqBuf)
-			
+
 			var partitionCount int32
 			binary.Read(reqBuf, binary.BigEndian, &partitionCount)
 
@@ -353,7 +354,7 @@ func (h *KafkaProtocolHandler) handleOffsetFetch(request *KafkaRequest) []byte {
 
 				binary.Write(&buf, binary.BigEndian, partition)
 				binary.Write(&buf, binary.BigEndian, offset)
-				h.writeString(&buf, "")            // metadata
+				h.writeString(&buf, "")                        // metadata
 				binary.Write(&buf, binary.BigEndian, int16(0)) // error code
 			}
 		}
@@ -410,7 +411,15 @@ func NewKafkaProtocolHandlerWithCoordinators(
 	transactionManager *TransactionManager,
 	compressionHandler *CompressionHandler,
 ) *KafkaProtocolHandler {
+	// Create processor (this will be the SINGLE entry point for all messages)
+	proc := processor.NewMessageProcessor(processor.DefaultProcessorConfig())
+	translator := NewKafkaTranslator()
+	bridge := NewProcessorBridge(proc, store)
+	
 	handler := &KafkaProtocolHandler{
+		processor:          proc,
+		translator:         translator,
+		bridge:             bridge,
 		messageStore:       store,
 		authProvider:       auth,
 		metricsCollector:   metrics,
@@ -448,7 +457,7 @@ func (h *KafkaProtocolHandler) handleDescribeGroups(request *KafkaRequest) []byt
 		descriptions := h.groupCoordinator.DescribeGroups(groupIDs)
 
 		// Response
-		binary.Write(&buf, binary.BigEndian, int32(0)) // throttle time
+		binary.Write(&buf, binary.BigEndian, int32(0))                 // throttle time
 		binary.Write(&buf, binary.BigEndian, int32(len(descriptions))) // group count
 
 		for _, desc := range descriptions {
@@ -489,8 +498,8 @@ func (h *KafkaProtocolHandler) handleListGroups(request *KafkaRequest) []byte {
 		groups := h.groupCoordinator.ListGroups()
 
 		// Response
-		binary.Write(&buf, binary.BigEndian, int32(0)) // throttle time
-		binary.Write(&buf, binary.BigEndian, int16(0)) // error code
+		binary.Write(&buf, binary.BigEndian, int32(0))           // throttle time
+		binary.Write(&buf, binary.BigEndian, int16(0))           // error code
 		binary.Write(&buf, binary.BigEndian, int32(len(groups))) // group count
 
 		for _, group := range groups {
@@ -515,7 +524,7 @@ func (h *KafkaProtocolHandler) handleInitProducerId(request *KafkaRequest) []byt
 
 	// Read transactional ID (nullable)
 	transactionalID, _ := h.readString(reqBuf)
-	
+
 	// Read transaction timeout
 	var transactionTimeoutMs int32
 	binary.Read(reqBuf, binary.BigEndian, &transactionTimeoutMs)
@@ -523,16 +532,16 @@ func (h *KafkaProtocolHandler) handleInitProducerId(request *KafkaRequest) []byt
 	log.Printf("[Kafka] InitProducerId: txnID=%s, timeout=%d", transactionalID, transactionTimeoutMs)
 
 	// Transaction manager support (stub for now)
-	_ = transactionalID // Use variable
+	_ = transactionalID      // Use variable
 	_ = transactionTimeoutMs // Use variable
 
 	// Generate simple producer ID for non-transactional producers
 	producerID := time.Now().UnixNano()
-	
-	binary.Write(&buf, binary.BigEndian, int32(0))      // throttle time
-	binary.Write(&buf, binary.BigEndian, int16(0))      // no error
-	binary.Write(&buf, binary.BigEndian, producerID)    // producer ID
-	binary.Write(&buf, binary.BigEndian, int16(0))      // producer epoch
+
+	binary.Write(&buf, binary.BigEndian, int32(0))   // throttle time
+	binary.Write(&buf, binary.BigEndian, int16(0))   // no error
+	binary.Write(&buf, binary.BigEndian, producerID) // producer ID
+	binary.Write(&buf, binary.BigEndian, int16(0))   // producer epoch
 
 	return buf.Bytes()
 }
@@ -576,4 +585,3 @@ type ExtendedKafkaProtocolHandler struct {
 	transactionManager *TransactionManager
 	compressionHandler *CompressionHandler
 }
-
