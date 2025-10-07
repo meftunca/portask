@@ -33,7 +33,6 @@ type KafkaProtocolHandler struct {
 	groupCoordinator   *GroupCoordinator
 	offsetManager      *OffsetManagerWithMetadata
 	transactionManager *TransactionManager
-	compressionHandler *CompressionHandler
 }
 
 // MessageStore interface for Kafka compatibility
@@ -246,19 +245,17 @@ func NewKafkaProtocolHandler(store MessageStore, auth AuthProvider, metrics Metr
 
 // HandleConnection handles a Kafka client connection
 func (h *KafkaProtocolHandler) HandleConnection(conn net.Conn) {
-	// Wrap connection with buffered I/O for better performance
-	bufferedConn := NewBufferedConn(conn)
-	defer bufferedConn.Close()
-	log.Printf("🔗 New Kafka connection from %s", bufferedConn.RemoteAddr())
+	defer conn.Close()
+	log.Printf("🔗 New Kafka connection from %s", conn.RemoteAddr())
 
 	for {
 		// Read request
-		request, err := h.readRequest(bufferedConn)
+		request, err := h.readRequest(conn)
 		if err != nil {
 			if err == io.EOF {
-				log.Printf("🔌 Kafka client disconnected: %s", bufferedConn.RemoteAddr())
+				log.Printf("🔌 Kafka client disconnected: %s", conn.RemoteAddr())
 			} else {
-				log.Printf("❌ Error reading Kafka request from %s: %v", bufferedConn.RemoteAddr(), err)
+				log.Printf("❌ Error reading Kafka request from %s: %v", conn.RemoteAddr(), err)
 			}
 			return
 		}
@@ -288,12 +285,12 @@ func (h *KafkaProtocolHandler) HandleConnection(conn net.Conn) {
 		}
 
 		// Write response
-		if err := h.writeResponse(bufferedConn, response); err != nil {
-			log.Printf("❌ Error writing Kafka response to %s: %v", bufferedConn.RemoteAddr(), err)
+		if err := h.writeResponse(conn, response); err != nil {
+			log.Printf("❌ Error writing Kafka response to %s: %v", conn.RemoteAddr(), err)
 			return
 		}
 
-		log.Printf("✅ Kafka API %d response sent to %s", request.Header.APIKey, bufferedConn.RemoteAddr())
+		log.Printf("✅ Kafka API %d response sent to %s", request.Header.APIKey, conn.RemoteAddr())
 	}
 }
 
@@ -311,34 +308,28 @@ type KafkaResponse struct {
 
 // readRequest reads a Kafka request from the connection
 func (h *KafkaProtocolHandler) readRequest(conn net.Conn) (*KafkaRequest, error) {
-	// Use buffer pool for size reading
-	sizeBuf := GetBuffer(4)
-	sizeBytes := (*sizeBuf)[:4]
+	// Read message size
+	sizeBytes := make([]byte, 4)
 
 	if _, err := io.ReadFull(conn, sizeBytes); err != nil {
 		log.Printf("❌ Failed to read message size: %v", err)
-		PutBuffer(sizeBuf)
 		return nil, err
 	}
 
 	size := binary.BigEndian.Uint32(sizeBytes)
-	PutBuffer(sizeBuf)
 	log.Printf("🔍 Kafka message size: %d bytes", size)
 
 	if size > 100*1024*1024 { // 100MB limit
 		return nil, fmt.Errorf("message too large: %d bytes", size)
 	}
 
-	// Use buffer pool for message body
-	msgBuf := GetBuffer(int(size))
-	messageBytes := (*msgBuf)[:size]
+	// Read message body
+	messageBytes := make([]byte, size)
 
 	if _, err := io.ReadFull(conn, messageBytes); err != nil {
 		log.Printf("❌ Failed to read message body: %v", err)
-		PutBuffer(msgBuf)
 		return nil, err
 	}
-	// Note: msgBuf will be released by caller
 
 	// Record bytes in
 	if h.metricsCollector != nil {
@@ -418,11 +409,9 @@ func (h *KafkaProtocolHandler) writeResponse(conn net.Conn, response *KafkaRespo
 	// Write message size + message
 	responseBytes := buf.Bytes()
 
-	// Use buffer pool for size bytes
-	sizeBuf := GetBuffer(4)
-	sizeBytes := (*sizeBuf)[:4]
+	// Prepare size bytes
+	sizeBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(sizeBytes, uint32(len(responseBytes)))
-	defer PutBuffer(sizeBuf)
 
 	// Send response
 	if _, err := conn.Write(sizeBytes); err != nil {

@@ -409,7 +409,6 @@ func NewKafkaProtocolHandlerWithCoordinators(
 	groupCoordinator *GroupCoordinator,
 	offsetManager *OffsetManagerWithMetadata,
 	transactionManager *TransactionManager,
-	compressionHandler *CompressionHandler,
 ) *KafkaProtocolHandler {
 	// Create processor (this will be the SINGLE entry point for all messages)
 	proc := processor.NewMessageProcessor(processor.DefaultProcessorConfig())
@@ -426,7 +425,6 @@ func NewKafkaProtocolHandlerWithCoordinators(
 		groupCoordinator:   groupCoordinator,
 		offsetManager:      offsetManager,
 		transactionManager: transactionManager,
-		compressionHandler: compressionHandler,
 	}
 
 	// Register extended handlers
@@ -576,12 +574,4 @@ func (h *KafkaProtocolHandler) handleEndTxn(request *KafkaRequest) []byte {
 func (h *KafkaProtocolHandler) registerExtendedHandlers() {
 	// These will be called from HandleRequest based on API key
 	log.Println("[Kafka] Extended handlers registered: FindCoordinator, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, OffsetCommit, OffsetFetch, DescribeGroups, ListGroups, InitProducerId")
-}
-
-// Add fields to KafkaProtocolHandler
-type ExtendedKafkaProtocolHandler struct {
-	groupCoordinator   *GroupCoordinator
-	offsetManager      *OffsetManagerWithMetadata
-	transactionManager *TransactionManager
-	compressionHandler *CompressionHandler
 }

@@ -28,20 +28,13 @@ func NewKafkaServer(addr string, store MessageStore) *KafkaServer {
 	// Note: Transaction manager will be initialized per-request
 	var transactionManager *TransactionManager
 
-	// Create compression handler
-	compressionHandler, err := NewCompressionHandler()
-	if err != nil {
-		log.Printf("Warning: Failed to create compression handler: %v", err)
-	}
-
 	handler := NewKafkaProtocolHandlerWithCoordinators(
-		store,
-		auth,
+		store, 
+		auth, 
 		metrics,
 		groupCoordinator,
 		offsetManager,
 		transactionManager,
-		compressionHandler,
 	)
 
 	return &KafkaServer{
