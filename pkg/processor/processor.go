@@ -18,6 +18,7 @@ type MessageProcessor struct {
 	messagePool     *memory.MessagePool
 	bufferPool      *memory.BufferPool
 	compressionPool *CompressionPool
+	batchWriter     *BatchWriter      // NEW: Batch writer for storage
 	processingQueue chan *ProcessTask
 	resultQueue     chan *ProcessResult
 	workers         []*Worker
@@ -42,6 +43,11 @@ type ProcessorConfig struct {
 	ProcessingTimeout     time.Duration
 	EnableSIMD            bool
 	EnableZeroCopy        bool
+	
+	// Batch Writer Configuration (NEW)
+	EnableBatchWrite      bool
+	BatchFlushInterval    time.Duration
+	BatchFlushSize        int
 }
 
 // DefaultProcessorConfig returns default processor configuration
@@ -58,6 +64,11 @@ func DefaultProcessorConfig() *ProcessorConfig {
 		ProcessingTimeout:     time.Second * 30,
 		EnableSIMD:            true,
 		EnableZeroCopy:        true,
+		
+		// Batch Writer Defaults
+		EnableBatchWrite:    true,                    // Enable batch writing by default
+		BatchFlushInterval:  10 * time.Millisecond,   // Flush every 10ms
+		BatchFlushSize:      1000,                    // Or every 1000 messages
 	}
 }
 
@@ -744,11 +755,13 @@ func (mp *MessageProcessor) updateMetrics(result *ProcessResult) {
 // AddEvent logs a processor event
 func (mp *MessageProcessor) AddEvent(ev ProcessorEvent) {
 	mp.eventsMu.Lock()
+	defer mp.eventsMu.Unlock()
+	
 	if len(mp.events) > 200 {
 		mp.events = mp.events[1:]
 	}
 	mp.events = append(mp.events, ev)
-	mp.eventsMu.Unlock()
+	
 	if ev.WorkerID >= 0 {
 		if mp.workerHealth == nil {
 			mp.workerHealth = make(map[int]*WorkerHealth)

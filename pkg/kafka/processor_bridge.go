@@ -11,15 +11,26 @@ import (
 // ProcessorBridge bridges Kafka handler with Portask processor and storage
 // This ensures all messages go through the processor for validation/processing
 type ProcessorBridge struct {
-	processor *processor.MessageProcessor
-	storage   MessageStore
+	processor   *processor.MessageProcessor
+	storage     MessageStore
+	batchWriter *processor.BatchWriter // Batch writer for optimized storage
 }
 
 // NewProcessorBridge creates a new processor bridge
 func NewProcessorBridge(proc *processor.MessageProcessor, storage MessageStore) *ProcessorBridge {
+	// Create storage adapter for batch writing
+	storageAdapter := &KafkaStorageAdapter{storage: storage}
+	
+	// Create batch writer
+	batchWriter := processor.NewBatchWriter(storageAdapter, processor.DefaultBatchWriterConfig())
+	
+	// Start batch writer
+	batchWriter.Start(context.Background())
+	
 	return &ProcessorBridge{
-		processor: proc,
-		storage:   storage,
+		processor:   proc,
+		storage:     storage,
+		batchWriter: batchWriter,
 	}
 }
 
@@ -31,18 +42,18 @@ func (pb *ProcessorBridge) ProduceMessage(ctx context.Context, msg *types.Portas
 		return -1, fmt.Errorf("processor failed: %w", err)
 	}
 
-	// 2. Store processed message
-	offset, err := pb.storage.ProduceMessage(
-		string(processedMsg.Topic),
-		processedMsg.Partition,
-		[]byte(processedMsg.Key),
-		processedMsg.Payload,
-	)
+	// 2. Write to batch writer (will flush every 10ms or 1000 messages)
+	err = pb.batchWriter.Write(processedMsg)
 	if err != nil {
-		return -1, fmt.Errorf("storage failed: %w", err)
+		return -1, fmt.Errorf("batch write failed: %w", err)
 	}
 
-	return offset, nil
+	return processedMsg.Timestamp, nil
+}
+
+// Stop stops the batch writer and flushes remaining messages
+func (pb *ProcessorBridge) Stop() error {
+	return pb.batchWriter.Stop()
 }
 
 // FetchMessages retrieves messages through storage
@@ -69,3 +80,24 @@ func (pb *ProcessorBridge) FetchMessages(ctx context.Context, req *types.FetchRe
 	return portaskMessages, nil
 }
 
+// KafkaStorageAdapter adapts MessageStore to processor.StorageBackend interface
+type KafkaStorageAdapter struct {
+	storage MessageStore
+}
+
+// StoreBatch implements processor.StorageBackend interface
+func (ksa *KafkaStorageAdapter) StoreBatch(ctx context.Context, batch *types.MessageBatch) error {
+	// Write each message in the batch to storage
+	for _, msg := range batch.Messages {
+		_, err := ksa.storage.ProduceMessage(
+			string(msg.Topic),
+			msg.Partition,
+			[]byte(msg.Key),
+			msg.Payload,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to store message %s: %w", msg.ID, err)
+		}
+	}
+	return nil
+}

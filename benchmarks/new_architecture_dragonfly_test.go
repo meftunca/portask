@@ -23,25 +23,25 @@ func TestNewArchitectureWithDragonfly(t *testing.T) {
 		KeyPrefix:         "portask-new-arch-test",
 		EnableCompression: true,
 	}
-	
+
 	ctx := context.Background()
 	dragonflyStore, err := dragonfly.NewDragonflyStore(dfConfig)
 	if err != nil {
 		t.Fatalf("Failed to create Dragonfly store: %v", err)
 	}
-	
+
 	err = dragonflyStore.Connect(ctx)
 	if err != nil {
 		t.Skipf("Dragonfly not available: %v. Please ensure Dragonfly is running on localhost:6379", err)
 		return
 	}
 	defer dragonflyStore.Close()
-	
+
 	// Clear test data
 	dragonflyStore.GetClient().FlushDB(ctx)
-	
+
 	t.Log("✅ Connected to Dragonfly")
-	
+
 	t.Run("Kafka_Translator_Processor_Dragonfly", func(t *testing.T) {
 		// 1. Create processor
 		proc := processor.NewMessageProcessor(processor.DefaultProcessorConfig())
@@ -49,51 +49,51 @@ func TestNewArchitectureWithDragonfly(t *testing.T) {
 			t.Fatalf("Failed to start processor: %v", err)
 		}
 		defer proc.Stop()
-		
+
 		// 2. Create Kafka store adapter
 		kafkaStore := NewDragonflyKafkaStore(ctx, dragonflyStore)
-		
+
 		// 3. Create translator and bridge
 		translator := kafka.NewKafkaTranslator()
 		bridge := kafka.NewProcessorBridge(proc, kafkaStore)
-		
+
 		// 4. Simulate Kafka client producing message
 		topic := "orders"
 		partition := int32(0)
 		key := []byte("order-123")
 		value := []byte(`{"order_id": "123", "customer": "John Doe", "amount": 99.99}`)
-		
+
 		// 5. Translate to Portask message
 		portaskMsg, err := translator.TranslateProduce(topic, partition, key, value)
 		if err != nil {
 			t.Fatalf("Translation failed: %v", err)
 		}
-		
+
 		t.Logf("📝 Translated Kafka message to Portask message (ID: %s)", portaskMsg.ID)
-		
+
 		// 6. Process through processor and store to Dragonfly
 		offset, err := bridge.ProduceMessage(ctx, portaskMsg)
 		if err != nil {
 			t.Fatalf("Processing failed: %v", err)
 		}
-		
+
 		t.Logf("✅ Message processed and stored to Dragonfly (offset: %d)", offset)
-		
+
 		// 7. Verify message was stored
 		stats, err := dragonflyStore.Stats(ctx)
 		if err != nil {
 			t.Fatalf("Failed to get stats: %v", err)
 		}
-		
+
 		if stats.MessageCount == 0 {
 			t.Error("Message was not stored to Dragonfly")
 		}
-		
+
 		t.Logf("📊 Dragonfly Stats:")
 		t.Logf("   Total Operations: %d", stats.TotalOperations)
 		t.Logf("   Messages Stored: %d", stats.MessageCount)
 		t.Logf("   Successful Operations: %d", stats.SuccessfulOperations)
-		
+
 		// 8. Verify processor metrics
 		procMetrics := proc.GetMetrics()
 		t.Logf("📊 Processor Stats:")
@@ -101,25 +101,25 @@ func TestNewArchitectureWithDragonfly(t *testing.T) {
 		t.Logf("   Success Count: %d", procMetrics.SuccessCount)
 		t.Logf("   Error Count: %d", procMetrics.ErrorCount)
 	})
-	
+
 	t.Run("AMQP_Translator_Processor_Dragonfly", func(t *testing.T) {
 		// Clear previous test data
 		dragonflyStore.GetClient().FlushDB(ctx)
-		
+
 		// 1. Create processor
 		proc := processor.NewMessageProcessor(processor.DefaultProcessorConfig())
 		if err := proc.Start(ctx); err != nil {
 			t.Fatalf("Failed to start processor: %v", err)
 		}
 		defer proc.Stop()
-		
+
 		// 2. Create AMQP store adapter
 		amqpStore := NewDragonflyAMQPStore(ctx, dragonflyStore)
-		
+
 		// 3. Create translator and bridge
 		translator := amqp.NewAMQPTranslator()
 		bridge := amqp.NewProcessorBridge(proc, amqpStore)
-		
+
 		// 4. Simulate AMQP client publishing message
 		exchange := "notifications"
 		routingKey := "email.sent"
@@ -129,65 +129,65 @@ func TestNewArchitectureWithDragonfly(t *testing.T) {
 			CorrelationID: "notif-456",
 			Priority:      5,
 		}
-		
+
 		// 5. Translate to Portask message
 		portaskMsg, err := translator.TranslatePublish(exchange, routingKey, body, props)
 		if err != nil {
 			t.Fatalf("Translation failed: %v", err)
 		}
-		
+
 		t.Logf("📝 Translated AMQP message to Portask message (ID: %s)", portaskMsg.ID)
-		
+
 		// 6. Process through processor and store to Dragonfly
 		offset, err := bridge.PublishMessage(ctx, portaskMsg)
 		if err != nil {
 			t.Fatalf("Processing failed: %v", err)
 		}
-		
+
 		t.Logf("✅ Message processed and stored to Dragonfly (offset: %d)", offset)
-		
+
 		// 7. Verify message was stored
 		stats, err := dragonflyStore.Stats(ctx)
 		if err != nil {
 			t.Fatalf("Failed to get stats: %v", err)
 		}
-		
+
 		if stats.MessageCount == 0 {
 			t.Error("Message was not stored to Dragonfly")
 		}
-		
+
 		t.Logf("📊 Dragonfly Stats:")
 		t.Logf("   Total Operations: %d", stats.TotalOperations)
 		t.Logf("   Messages Stored: %d", stats.MessageCount)
-		
+
 		// 8. Verify processor metrics
 		procMetrics := proc.GetMetrics()
 		t.Logf("📊 Processor Stats:")
 		t.Logf("   Total Tasks: %d", procMetrics.TotalTasks)
 		t.Logf("   Success Count: %d", procMetrics.SuccessCount)
 	})
-	
+
 	t.Run("Mixed_Protocols_Same_Processor", func(t *testing.T) {
 		// Clear previous test data
 		dragonflyStore.GetClient().FlushDB(ctx)
-		
+
 		// Single processor for ALL protocols
 		proc := processor.NewMessageProcessor(processor.DefaultProcessorConfig())
 		if err := proc.Start(ctx); err != nil {
 			t.Fatalf("Failed to start processor: %v", err)
 		}
 		defer proc.Stop()
-		
+
 		// Kafka setup
 		kafkaStore := NewDragonflyKafkaStore(ctx, dragonflyStore)
 		kafkaTranslator := kafka.NewKafkaTranslator()
 		kafkaBridge := kafka.NewProcessorBridge(proc, kafkaStore)
-		
+
 		// AMQP setup
 		amqpStore := NewDragonflyAMQPStore(ctx, dragonflyStore)
 		amqpTranslator := amqp.NewAMQPTranslator()
 		amqpBridge := amqp.NewProcessorBridge(proc, amqpStore)
-		
+
 		// Send messages from both protocols
 		messages := []struct {
 			protocol string
@@ -214,7 +214,7 @@ func TestNewArchitectureWithDragonfly(t *testing.T) {
 				return err
 			}},
 		}
-		
+
 		// Process all messages
 		for i, msg := range messages {
 			if err := msg.produce(); err != nil {
@@ -222,25 +222,25 @@ func TestNewArchitectureWithDragonfly(t *testing.T) {
 			}
 			t.Logf("✅ Processed %s message %d", msg.protocol, i+1)
 		}
-		
+
 		// Verify all went through same processor
 		procMetrics := proc.GetMetrics()
-		
+
 		t.Logf("📊 Final Processor Stats:")
 		t.Logf("   Total Tasks: %d", procMetrics.TotalTasks)
 		t.Logf("   Success Count: %d", procMetrics.SuccessCount)
 		t.Logf("   Error Count: %d", procMetrics.ErrorCount)
-		
+
 		// Verify Dragonfly storage
 		stats, _ := dragonflyStore.Stats(ctx)
 		t.Logf("📊 Final Dragonfly Stats:")
 		t.Logf("   Messages Stored: %d", stats.MessageCount)
 		t.Logf("   Total Operations: %d", stats.TotalOperations)
-		
+
 		if stats.MessageCount < 4 {
 			t.Errorf("Expected at least 4 messages, got %d", stats.MessageCount)
 		}
-		
+
 		t.Log("✅ All protocols successfully used same processor!")
 	})
 }
@@ -254,44 +254,44 @@ func BenchmarkNewArchitectureWithDragonfly(b *testing.B) {
 		KeyPrefix:         "portask-bench",
 		EnableCompression: false, // Disable for raw performance
 	}
-	
+
 	ctx := context.Background()
 	dragonflyStore, err := dragonfly.NewDragonflyStore(dfConfig)
 	if err != nil {
 		b.Fatalf("Failed to create Dragonfly store: %v", err)
 	}
-	
+
 	if err := dragonflyStore.Connect(ctx); err != nil {
 		b.Skipf("Dragonfly not available: %v", err)
 		return
 	}
 	defer dragonflyStore.Close()
-	
+
 	// Clear test data
 	dragonflyStore.GetClient().FlushDB(ctx)
-	
+
 	b.Run("Kafka_WithProcessor", func(b *testing.B) {
 		// Setup
 		proc := processor.NewMessageProcessor(processor.DefaultProcessorConfig())
 		proc.Start(ctx)
 		defer proc.Stop()
-		
+
 		kafkaStore := NewDragonflyKafkaStore(ctx, dragonflyStore)
 		translator := kafka.NewKafkaTranslator()
 		bridge := kafka.NewProcessorBridge(proc, kafkaStore)
-		
+
 		payload := make([]byte, 1024) // 1KB payload
-		
+
 		b.ResetTimer()
 		b.ReportAllocs()
-		
+
 		for i := 0; i < b.N; i++ {
 			msg, _ := translator.TranslateProduce("bench-topic", 0, nil, payload)
 			bridge.ProduceMessage(ctx, msg)
 		}
-		
+
 		b.StopTimer()
-		
+
 		// Report stats
 		stats, _ := dragonflyStore.Stats(ctx)
 		b.ReportMetric(float64(stats.MessageCount), "messages_stored")
@@ -319,11 +319,11 @@ func (d *DragonflyKafkaStoreAdapter) ProduceMessage(topic string, partition int3
 		Timestamp: time.Now().UnixNano(),
 		TTL:       int64(time.Hour),
 	}
-	
+
 	if err := d.store.Store(d.ctx, msg); err != nil {
 		return 0, err
 	}
-	
+
 	return msg.Timestamp, nil
 }
 
@@ -332,7 +332,7 @@ func (d *DragonflyKafkaStoreAdapter) ConsumeMessages(topic string, partition int
 	if err != nil {
 		return nil, err
 	}
-	
+
 	kafkaMessages := make([]*kafka.Message, 0, len(messages))
 	for _, msg := range messages {
 		kafkaMessages = append(kafkaMessages, &kafka.Message{
@@ -341,7 +341,7 @@ func (d *DragonflyKafkaStoreAdapter) ConsumeMessages(topic string, partition int
 			Value:  msg.Payload,
 		})
 	}
-	
+
 	return kafkaMessages, nil
 }
 
@@ -375,7 +375,7 @@ func (d *DragonflyAMQPStoreAdapter) StoreMessage(topic string, message []byte) e
 		Timestamp: time.Now().UnixNano(),
 		TTL:       int64(time.Hour),
 	}
-	
+
 	return d.store.Store(d.ctx, msg)
 }
 
@@ -384,16 +384,15 @@ func (d *DragonflyAMQPStoreAdapter) GetMessages(topic string, offset int64) ([][
 	if err != nil {
 		return nil, err
 	}
-	
+
 	result := make([][]byte, 0, len(messages))
 	for _, msg := range messages {
 		result = append(result, msg.Payload)
 	}
-	
+
 	return result, nil
 }
 
 func (d *DragonflyAMQPStoreAdapter) GetTopics() []string {
 	return []string{}
 }
-

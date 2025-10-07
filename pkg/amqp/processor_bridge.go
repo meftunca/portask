@@ -11,15 +11,26 @@ import (
 // ProcessorBridge bridges AMQP handler with Portask processor and storage
 // This ensures all messages go through the processor for validation/processing
 type ProcessorBridge struct {
-	processor *processor.MessageProcessor
-	storage   MessageStore
+	processor   *processor.MessageProcessor
+	storage     MessageStore
+	batchWriter *processor.BatchWriter // Batch writer for optimized storage
 }
 
 // NewProcessorBridge creates a new processor bridge
 func NewProcessorBridge(proc *processor.MessageProcessor, storage MessageStore) *ProcessorBridge {
+	// Create storage adapter for batch writing
+	storageAdapter := &AMQPStorageAdapter{storage: storage}
+	
+	// Create batch writer
+	batchWriter := processor.NewBatchWriter(storageAdapter, processor.DefaultBatchWriterConfig())
+	
+	// Start batch writer
+	batchWriter.Start(context.Background())
+	
 	return &ProcessorBridge{
-		processor: proc,
-		storage:   storage,
+		processor:   proc,
+		storage:     storage,
+		batchWriter: batchWriter,
 	}
 }
 
@@ -31,15 +42,19 @@ func (pb *ProcessorBridge) PublishMessage(ctx context.Context, msg *types.Portas
 		return -1, fmt.Errorf("processor failed: %w", err)
 	}
 
-	// 2. Store processed message
-	// Convert topic to string for storage
-	err = pb.storage.StoreMessage(string(processedMsg.Topic), processedMsg.Payload)
+	// 2. Write to batch writer (will flush every 10ms or 1000 messages)
+	err = pb.batchWriter.Write(processedMsg)
 	if err != nil {
-		return -1, fmt.Errorf("storage failed: %w", err)
+		return -1, fmt.Errorf("batch write failed: %w", err)
 	}
 
 	// Return timestamp as offset
 	return processedMsg.Timestamp, nil
+}
+
+// Stop stops the batch writer and flushes remaining messages
+func (pb *ProcessorBridge) Stop() error {
+	return pb.batchWriter.Stop()
 }
 
 // ConsumeMessages retrieves messages through storage
@@ -63,5 +78,22 @@ func (pb *ProcessorBridge) ConsumeMessages(ctx context.Context, req *types.Fetch
 	}
 
 	return portaskMessages, nil
+}
+
+// AMQPStorageAdapter adapts MessageStore to processor.StorageBackend interface
+type AMQPStorageAdapter struct {
+	storage MessageStore
+}
+
+// StoreBatch implements processor.StorageBackend interface
+func (asa *AMQPStorageAdapter) StoreBatch(ctx context.Context, batch *types.MessageBatch) error {
+	// Write each message in the batch to storage
+	for _, msg := range batch.Messages {
+		err := asa.storage.StoreMessage(string(msg.Topic), msg.Payload)
+		if err != nil {
+			return fmt.Errorf("failed to store message %s: %w", msg.ID, err)
+		}
+	}
+	return nil
 }
 
