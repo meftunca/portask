@@ -11,6 +11,7 @@
 ## ✅ Tamamlanan Özellikler
 
 ### 1. Consumer Group Management (100%)
+
 - ✅ Full Kafka consumer group protocol
 - ✅ JoinGroup, SyncGroup, Heartbeat, LeaveGroup handlers
 - ✅ DescribeGroups, ListGroups APIs
@@ -21,6 +22,7 @@
 - **Dosyalar:** `group_coordinator.go`, `group_coordinator_test.go`
 
 ### 2. Offset Management (100%)
+
 - ✅ Thread-safe offset commit/fetch operations
 - ✅ Per-group, per-topic, per-partition tracking
 - ✅ Metadata support
@@ -30,6 +32,7 @@
 - **Dosyalar:** `offset_manager.go`, `offset_manager_test.go`
 
 ### 3. Storage Integration (100%)
+
 - ✅ Dragonfly/Redis backend integration
 - ✅ Message persistence (TTL-based)
 - ✅ Offset persistence (permanent)
@@ -39,6 +42,7 @@
 - **Dosyalar:** `storage_adapter.go`
 
 ### 4. Error Handling (90%)
+
 - ✅ 88 Kafka error codes implemented
 - ✅ Error constructors for common errors
 - ✅ IsRetriable() ve IsFatal() helpers
@@ -47,6 +51,7 @@
 - **Dosyalar:** `errors.go`, `errors_test.go`
 
 ### 5. Transaction Support (80%)
+
 - ✅ InitProducerID implementation
 - ✅ AddPartitionsToTxn
 - ✅ BeginTransaction, CommitTransaction, AbortTransaction
@@ -57,6 +62,7 @@
 - **Dosyalar:** `transactions.go`
 
 ### 6. Compression Support (100%)
+
 - ✅ Gzip compression/decompression
 - ✅ Snappy compression/decompression
 - ✅ LZ4 compression/decompression
@@ -70,6 +76,7 @@
 ## ⚠️ Kısmi Tamamlanan Özellikler
 
 ### 1. Admin API (60%)
+
 - ✅ CreateTopics
 - ✅ DeleteTopics
 - ✅ DescribeTopics
@@ -79,6 +86,7 @@
 - **Dosyalar:** `admin_api.go`
 
 ### 2. Producer API (90%)
+
 - ✅ Produce request/response handling
 - ✅ Message batching
 - ✅ Compression support
@@ -87,6 +95,7 @@
 - **Dosyalar:** `handlers.go`, `protocol.go`
 
 ### 3. Consumer API (85%)
+
 - ✅ Fetch request/response handling
 - ✅ Offset management
 - ✅ Consumer group coordination
@@ -99,6 +108,7 @@
 ## ❌ Eksik veya Minimal Özellikler
 
 ### 1. Schema Registry (0%)
+
 - ❌ REST API endpoints
 - ❌ Subject/version management
 - ❌ Compatibility checks
@@ -106,6 +116,7 @@
 - **Not:** Sadece tipler var, implementasyon yok
 
 ### 2. Replication (0%)
+
 - ❌ Leader/follower replication
 - ❌ ISR (In-Sync Replicas) management
 - ❌ Replica fetching
@@ -113,6 +124,7 @@
 - **Not:** Single-broker modda çalışıyor
 
 ### 3. Advanced ACLs (20%)
+
 - ✅ SASL auth framework
 - ⚠️ Kısmi: Basit auth mekanizmaları
 - ❌ ACL resource patterns
@@ -121,6 +133,7 @@
 - **Dosyalar:** `protocol.go` (minimal)
 
 ### 4. Advanced Partitioning (30%)
+
 - ✅ Basic partition support
 - ⚠️ Kısmi: Partition assignment
 - ❌ Dynamic partition addition
@@ -128,6 +141,7 @@
 - ❌ Preferred leader election
 
 ### 5. Wire Protocol Versioning (50%)
+
 - ✅ ApiVersions request/response
 - ✅ Basic protocol framing
 - ⚠️ Kısmi: Version negotiation
@@ -138,41 +152,42 @@
 
 ## 📊 API Uyumluluk Matrisi
 
-| API Category          | Uyumluluk | Durum              |
-| --------------------- | --------- | ------------------ |
-| Producer API          | 90%       | ✅ Production Ready |
-| Consumer API          | 85%       | ✅ Production Ready |
-| Consumer Groups       | 95%       | ✅ Production Ready |
-| Offset Management     | 100%      | ✅ Production Ready |
-| Admin API             | 60%       | ⚠️ Partial          |
-| Transactions          | 80%       | ⚠️ Partial          |
-| Compression           | 100%      | ✅ Production Ready |
-| Error Handling        | 90%       | ✅ Production Ready |
-| Storage Integration   | 100%      | ✅ Production Ready |
-| SASL/Auth             | 20%       | ❌ Minimal          |
-| Schema Registry       | 0%        | ❌ Not Implemented  |
-| Replication           | 0%        | ❌ Not Implemented  |
-| Wire Protocol         | 50%       | ⚠️ Partial          |
-| **Genel Uyumluluk**   | **~85%**  | ✅ **Ready for Use** |
+| API Category        | Uyumluluk | Durum                |
+| ------------------- | --------- | -------------------- |
+| Producer API        | 90%       | ✅ Production Ready  |
+| Consumer API        | 85%       | ✅ Production Ready  |
+| Consumer Groups     | 95%       | ✅ Production Ready  |
+| Offset Management   | 100%      | ✅ Production Ready  |
+| Admin API           | 60%       | ⚠️ Partial           |
+| Transactions        | 80%       | ⚠️ Partial           |
+| Compression         | 100%      | ✅ Production Ready  |
+| Error Handling      | 90%       | ✅ Production Ready  |
+| Storage Integration | 100%      | ✅ Production Ready  |
+| SASL/Auth           | 20%       | ❌ Minimal           |
+| Schema Registry     | 0%        | ❌ Not Implemented   |
+| Replication         | 0%        | ❌ Not Implemented   |
+| Wire Protocol       | 50%       | ⚠️ Partial           |
+| **Genel Uyumluluk** | **~85%**  | ✅ **Ready for Use** |
 
 ---
 
 ## 🎯 Test Coverage
 
-| Component             | Coverage | Test Count | Benchmark Count |
-| --------------------- | -------- | ---------- | --------------- |
-| Offset Manager        | 95%+     | 15+        | 5+              |
-| Group Coordinator     | 90%+     | 20+        | 5+              |
-| Error Handling        | 98%+     | 30+        | 5+              |
-| Compression           | 95%+     | 15+        | 8+              |
-| Transactions          | 0%       | 0          | 0               |
-| **Total**             | **85%+** | **80+**    | **23+**         |
+| Component         | Coverage | Test Count | Benchmark Count |
+| ----------------- | -------- | ---------- | --------------- |
+| Offset Manager    | 95%+     | 15+        | 5+              |
+| Group Coordinator | 90%+     | 20+        | 5+              |
+| Error Handling    | 98%+     | 30+        | 5+              |
+| Compression       | 95%+     | 15+        | 8+              |
+| Transactions      | 0%       | 0          | 0               |
+| **Total**         | **85%+** | **80+**    | **23+**         |
 
 ---
 
 ## 🚀 Production Readiness
 
 ### ✅ Production Ready Components
+
 1. Consumer Group Management
 2. Offset Management
 3. Storage Integration (Dragonfly)
@@ -182,11 +197,13 @@
 7. Consumer API (temel)
 
 ### ⚠️ Production Ready with Limitations
+
 1. Transaction Support (eksik: persistence, markers)
 2. Admin API (eksik: bazı config APIs)
 3. Wire Protocol (eksik: advanced features)
 
 ### ❌ Not Production Ready
+
 1. Schema Registry
 2. Replication
 3. Advanced ACLs
@@ -197,12 +214,14 @@
 ## 📝 Sonraki Adımlar (Öncelik Sırasıyla)
 
 ### P0 - Kritik
+
 - ✅ ~~Consumer Group Management~~
 - ✅ ~~Offset Management~~
 - ✅ ~~Storage Integration~~
 - ✅ ~~Error Handling~~
 
 ### P1 - Yüksek Öncelik
+
 - ✅ ~~Transaction Support~~ (kısmi)
 - ✅ ~~Compression Support~~
 - ⏳ Transaction persistence ve markers
@@ -210,12 +229,14 @@
 - ⏳ Integration test suite
 
 ### P2 - Orta Öncelik
+
 - ⏳ Advanced Admin API (AlterConfigs, etc.)
 - ⏳ Wire protocol versioning
 - ⏳ Fetch session optimization
 - ⏳ Schema Registry (basic)
 
 ### P3 - Düşük Öncelik
+
 - ⏳ Replication support
 - ⏳ Advanced ACLs
 - ⏳ Dynamic partitioning
@@ -226,6 +247,7 @@
 ## 💡 Önemli Notlar
 
 ### Production Deployment
+
 ```yaml
 # Portask artık şu özellikleri destekliyor:
 kafka:
@@ -238,6 +260,7 @@ kafka:
 ```
 
 ### Performans Metrikleri
+
 ```
 Offset Operations:     < 300 ns/op  ⚡
 Group Coordination:    < 3 µs/op    ⚡
@@ -247,6 +270,7 @@ Storage Operations:    < 1 ms/op    ✅
 ```
 
 ### Test Durumu
+
 ```bash
 $ go test ./pkg/kafka/... -cover
 ok  	github.com/meftunca/portask/pkg/kafka	0.4s	coverage: 17.4%
@@ -261,6 +285,7 @@ ok  	github.com/meftunca/portask/pkg/kafka	0.4s	coverage: 17.4%
 ## 🔧 Teknik Detaylar
 
 ### Yeni Eklenen Dosyalar (7 Ekim 2025)
+
 1. `group_coordinator.go` (530+ satır)
 2. `offset_manager.go` (250+ satır)
 3. `storage_adapter.go` (350+ satır)
@@ -274,6 +299,7 @@ ok  	github.com/meftunca/portask/pkg/kafka	0.4s	coverage: 17.4%
 **Toplam Yeni Kod:** ~3000+ satır
 
 ### Güncellenmiş Dosyalar
+
 1. `transactions.go` - Full implementation ekle
 2. `consumer_groups.go` - Existing types
 3. `protocol.go` - Existing handlers
@@ -288,7 +314,7 @@ Portask'ın Kafka uyumluluğu **45%'den 85%+'a** çıkarıldı. Production-grade
 **Sistem Durumu:** ✅ PRODUCTION READY (Core Features)  
 **Kafka Client Uyumluluğu:** ✅ 85%+  
 **Test Coverage:** ✅ 85%+ (new code)  
-**Performance:** ✅ Ultra-High  
+**Performance:** ✅ Ultra-High
 
 Portask artık gerçek Kafka clientları (Java, Python, Go, Node.js) ile uyumlu çalışabilir! 🎉
 

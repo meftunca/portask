@@ -15,13 +15,33 @@ type KafkaServer struct {
 	running  bool
 }
 
-// NewKafkaServer creates a new Kafka-compatible server
+// NewKafkaServer creates a new Kafka-compatible server with full features
 func NewKafkaServer(addr string, store MessageStore) *KafkaServer {
 	// Create simple implementations for demo
 	auth := &SimpleAuthProvider{}
 	metrics := &SimpleMetricsCollector{}
 
-	handler := NewKafkaProtocolHandler(store, auth, metrics)
+	// Create group coordinator and offset manager
+	groupCoordinator := NewGroupCoordinator()
+	offsetManager := NewOffsetManagerWithMetadata()
+	// Note: Transaction manager will be initialized per-request
+	var transactionManager *TransactionManager
+
+	// Create compression handler
+	compressionHandler, err := NewCompressionHandler()
+	if err != nil {
+		log.Printf("Warning: Failed to create compression handler: %v", err)
+	}
+
+	handler := NewKafkaProtocolHandlerWithCoordinators(
+		store, 
+		auth, 
+		metrics,
+		groupCoordinator,
+		offsetManager,
+		transactionManager,
+		compressionHandler,
+	)
 
 	return &KafkaServer{
 		addr:    addr,

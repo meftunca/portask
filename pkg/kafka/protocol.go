@@ -16,9 +16,13 @@ import (
 
 // KafkaProtocolHandler handles Kafka wire protocol
 type KafkaProtocolHandler struct {
-	messageStore MessageStore
-	auth         AuthProvider
-	metrics      MetricsCollector
+	messageStore       MessageStore
+	authProvider       AuthProvider
+	metricsCollector   MetricsCollector
+	groupCoordinator   *GroupCoordinator
+	offsetManager      *OffsetManagerWithMetadata
+	transactionManager *TransactionManager
+	compressionHandler *CompressionHandler
 }
 
 // MessageStore interface for Kafka compatibility
@@ -212,12 +216,12 @@ type User struct {
 	Groups   []string
 }
 
-// NewKafkaProtocolHandler creates a new Kafka protocol handler
+// NewKafkaProtocolHandler creates a new Kafka protocol handler (legacy, use NewKafkaProtocolHandlerWithCoordinators)
 func NewKafkaProtocolHandler(store MessageStore, auth AuthProvider, metrics MetricsCollector) *KafkaProtocolHandler {
 	return &KafkaProtocolHandler{
-		messageStore: store,
-		auth:         auth,
-		metrics:      metrics,
+		messageStore:     store,
+		authProvider:     auth,
+		metricsCollector: metrics,
 	}
 }
 
@@ -239,8 +243,8 @@ func (h *KafkaProtocolHandler) HandleConnection(conn net.Conn) {
 		}
 
 		// Record metrics
-		if h.metrics != nil {
-			h.metrics.IncrementRequestCount(request.Header.APIKey)
+		if h.metricsCollector != nil {
+			h.metricsCollector.IncrementRequestCount(request.Header.APIKey)
 		}
 
 		start := time.Now()
@@ -258,8 +262,8 @@ func (h *KafkaProtocolHandler) HandleConnection(conn net.Conn) {
 		}
 
 		// Record latency
-		if h.metrics != nil {
-			h.metrics.RecordRequestLatency(request.Header.APIKey, time.Since(start))
+		if h.metricsCollector != nil {
+			h.metricsCollector.RecordRequestLatency(request.Header.APIKey, time.Since(start))
 		}
 
 		// Write response
@@ -308,8 +312,8 @@ func (h *KafkaProtocolHandler) readRequest(conn net.Conn) (*KafkaRequest, error)
 	}
 
 	// Record bytes in
-	if h.metrics != nil {
-		h.metrics.RecordBytesIn(int64(size + 4))
+	if h.metricsCollector != nil {
+		h.metricsCollector.RecordBytesIn(int64(size + 4))
 	}
 
 	// Parse header
@@ -396,8 +400,8 @@ func (h *KafkaProtocolHandler) writeResponse(conn net.Conn, response *KafkaRespo
 	}
 
 	// Record bytes out
-	if h.metrics != nil {
-		h.metrics.RecordBytesOut(int64(len(responseBytes) + 4))
+	if h.metricsCollector != nil {
+		h.metricsCollector.RecordBytesOut(int64(len(responseBytes) + 4))
 	}
 
 	return nil
@@ -478,43 +482,6 @@ func (h *KafkaProtocolHandler) readString(buf *bytes.Reader) (string, error) {
 	return string(str), nil
 }
 
-func (h *KafkaProtocolHandler) readBytes(buf *bytes.Reader) ([]byte, error) {
-	var length int32
-	if err := binary.Read(buf, binary.BigEndian, &length); err != nil {
-		return nil, err
-	}
-
-	if length < 0 {
-		return nil, nil // null bytes
-	}
-
-	bytes := make([]byte, length)
-	if _, err := buf.Read(bytes); err != nil {
-		return nil, err
-	}
-
-	return bytes, nil
-}
-
-func (h *KafkaProtocolHandler) writeString(buf *bytes.Buffer, str string) {
-	if str == "" {
-		binary.Write(buf, binary.BigEndian, int16(-1))
-		return
-	}
-
-	binary.Write(buf, binary.BigEndian, int16(len(str)))
-	buf.WriteString(str)
-}
-
-func (h *KafkaProtocolHandler) writeBytes(buf *bytes.Buffer, data []byte) {
-	if data == nil {
-		binary.Write(buf, binary.BigEndian, int32(-1))
-		return
-	}
-
-	binary.Write(buf, binary.BigEndian, int32(len(data)))
-	buf.Write(data)
-}
 
 func (h *KafkaProtocolHandler) createErrorResponse(errorCode int16) []byte {
 	var buf bytes.Buffer
@@ -527,34 +494,12 @@ func (h *KafkaProtocolHandler) createErrorResponse(errorCode int16) []byte {
 // =====================
 
 // Consumer Group Management Handlers
-func (h *KafkaProtocolHandler) handleJoinGroup(request *KafkaRequest) []byte {
-	// TODO: Implement JoinGroup logic
-	return h.createErrorResponse(UnsupportedVersion)
-}
-func (h *KafkaProtocolHandler) handleSyncGroup(request *KafkaRequest) []byte {
-	// TODO: Implement SyncGroup logic
-	return h.createErrorResponse(UnsupportedVersion)
-}
-func (h *KafkaProtocolHandler) handleHeartbeat(request *KafkaRequest) []byte {
-	// TODO: Implement Heartbeat logic
-	return h.createErrorResponse(UnsupportedVersion)
-}
+// JoinGroup, SyncGroup, Heartbeat implementations moved to handlers_extended.go
 func (h *KafkaProtocolHandler) handleDescribeGroups(request *KafkaRequest) []byte {
 	// TODO: Implement DescribeGroups response
 	return h.createErrorResponse(UnsupportedVersion)
 }
-func (h *KafkaProtocolHandler) handleOffsetCommit(request *KafkaRequest) []byte {
-	// TODO: Implement OffsetCommit response
-	return h.createErrorResponse(UnsupportedVersion)
-}
-func (h *KafkaProtocolHandler) handleOffsetFetch(request *KafkaRequest) []byte {
-	// TODO: Implement OffsetFetch response
-	return h.createErrorResponse(UnsupportedVersion)
-}
-func (h *KafkaProtocolHandler) handleFindCoordinator(request *KafkaRequest) []byte {
-	// TODO: Implement FindCoordinator response
-	return h.createErrorResponse(UnsupportedVersion)
-}
+// OffsetCommit, OffsetFetch, FindCoordinator implementations moved to handlers_extended.go
 
 // Transaction Handlers
 func (h *KafkaProtocolHandler) handleInitProducerId(request *KafkaRequest) []byte {
