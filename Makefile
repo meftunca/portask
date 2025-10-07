@@ -3,7 +3,7 @@
 
 # Variables
 BINARY_NAME=portask
-BINARY_PATH=./cmd/portask
+BINARY_PATH=./cmd/server
 BUILD_DIR=./build
 GO_FILES=$(shell find . -name "*.go" -type f -not -path "./vendor/*")
 VERSION=$(shell git describe --tags --always --dirty)

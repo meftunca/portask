@@ -1,0 +1,106 @@
+{
+  "dashboard": {
+    "title": "Portask Performance Dashboard",
+    "tags": ["portask", "queue", "performance"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Messages Per Second",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(portask_messages_produced_total[1m])",
+            "legendFormat": "Produced"
+          },
+          {
+            "expr": "rate(portask_messages_consumed_total[1m])",
+            "legendFormat": "Consumed"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Latency Percentiles (ms)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, portask_publish_duration_seconds) * 1000",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, portask_publish_duration_seconds) * 1000",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, portask_publish_duration_seconds) * 1000",
+            "legendFormat": "P99"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Queue Sizes",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "portask_queue_size{priority=\"high\"}",
+            "legendFormat": "High Priority"
+          },
+          {
+            "expr": "portask_queue_size{priority=\"normal\"}",
+            "legendFormat": "Normal Priority"
+          },
+          {
+            "expr": "portask_queue_size{priority=\"low\"}",
+            "legendFormat": "Low Priority"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Memory Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "portask_memory_usage_bytes / 1024 / 1024",
+            "legendFormat": "Memory (MB)"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Active Workers",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "portask_active_workers"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(portask_errors_total[1m])",
+            "legendFormat": "Errors/sec"
+          }
+        ]
+      }
+    ],
+    "refresh": "5s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}
+
