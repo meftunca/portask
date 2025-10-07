@@ -20,13 +20,13 @@ type ProcessorBridge struct {
 func NewProcessorBridge(proc *processor.MessageProcessor, storage MessageStore) *ProcessorBridge {
 	// Create storage adapter for batch writing
 	storageAdapter := &KafkaStorageAdapter{Storage: storage}
-	
+
 	// Create batch writer
 	batchWriter := processor.NewBatchWriter(storageAdapter, processor.DefaultBatchWriterConfig())
-	
+
 	// Start batch writer
 	batchWriter.Start(context.Background())
-	
+
 	return &ProcessorBridge{
 		processor:   proc,
 		storage:     storage,

@@ -31,11 +31,11 @@ func (d *DragonflyKafkaStoreAdapter) ProduceMessage(topic string, partition int3
 		Timestamp: time.Now().UnixNano(),
 		TTL:       int64(time.Hour),
 	}
-	
+
 	if err := d.store.Store(d.ctx, msg); err != nil {
 		return 0, err
 	}
-	
+
 	return msg.Timestamp, nil
 }
 
@@ -44,7 +44,7 @@ func (d *DragonflyKafkaStoreAdapter) ConsumeMessages(topic string, partition int
 	if err != nil {
 		return nil, err
 	}
-	
+
 	kafkaMessages := make([]*kafka.Message, 0, len(messages))
 	for _, msg := range messages {
 		kafkaMessages = append(kafkaMessages, &kafka.Message{
@@ -53,7 +53,7 @@ func (d *DragonflyKafkaStoreAdapter) ConsumeMessages(topic string, partition int
 			Value:  msg.Payload,
 		})
 	}
-	
+
 	return kafkaMessages, nil
 }
 
@@ -68,4 +68,3 @@ func (d *DragonflyKafkaStoreAdapter) CreateTopic(topic string, partitions int32,
 func (d *DragonflyKafkaStoreAdapter) DeleteTopic(topic string) error {
 	return nil
 }
-
