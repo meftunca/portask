@@ -126,14 +126,14 @@ export function TransactionModal({ transaction, open, onOpenChange, onUpdate }: 
         <DialogFooter>
           {transaction.state === 'ACTIVE' ? (
             <>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleAbort}
                 disabled={loading}
               >
                 Abort Transaction
               </Button>
-              <Button 
+              <Button
                 onClick={handleCommit}
                 disabled={loading}
               >

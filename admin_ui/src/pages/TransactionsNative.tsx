@@ -1,8 +1,9 @@
+import { TransactionModal } from '@/components/modals/TransactionModal'
+import { BeginTransactionModal } from '@/components/modals/BeginTransactionModal'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { TransactionModal } from '@/components/modals/TransactionModal'
 import { apiBase } from '@/lib/api'
 import { Activity, Blocks, CheckCircle, Eye, Plus, RefreshCw, XCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -22,10 +23,11 @@ export default function TransactionsNative() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Modal state
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showBeginModal, setShowBeginModal] = useState(false)
 
   const fetchTransactions = async () => {
     setLoading(true)
@@ -102,7 +104,7 @@ export default function TransactionsNative() {
             <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
             Refresh
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={() => setShowBeginModal(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Begin Transaction
           </Button>
@@ -182,7 +184,7 @@ export default function TransactionsNative() {
             <div className="text-center py-8">
               <Blocks className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
               <p className="mt-4 text-muted-foreground">No transactions found. Begin a transaction to get started.</p>
-              <Button className="mt-4">
+              <Button className="mt-4" onClick={() => setShowBeginModal(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Begin Transaction
               </Button>
@@ -203,7 +205,7 @@ export default function TransactionsNative() {
               </TableHeader>
               <TableBody>
                 {transactions.map((txn) => (
-                  <TableRow 
+                  <TableRow
                     key={txn.id}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => {
@@ -224,8 +226,8 @@ export default function TransactionsNative() {
                     <TableCell>{new Date(txn.expires_at).toLocaleTimeString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setSelectedTransaction(txn)
@@ -250,6 +252,13 @@ export default function TransactionsNative() {
         open={showDetailModal}
         onOpenChange={setShowDetailModal}
         onUpdate={fetchTransactions}
+      />
+
+      {/* Begin Transaction Modal */}
+      <BeginTransactionModal
+        open={showBeginModal}
+        onOpenChange={setShowBeginModal}
+        onSuccess={fetchTransactions}
       />
     </div>
   )

@@ -1,8 +1,9 @@
+import { ConsumerGroupModal } from '@/components/modals/ConsumerGroupModal'
+import { CreateConsumerGroupModal } from '@/components/modals/CreateConsumerGroupModal'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ConsumerGroupModal } from '@/components/modals/ConsumerGroupModal'
 import { apiBase } from '@/lib/api'
 import { Activity, Eye, Plus, RefreshCw, TrendingDown, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -22,10 +23,11 @@ export default function ConsumerGroupsNative() {
   const [groups, setGroups] = useState<ConsumerGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Modal state
   const [selectedGroup, setSelectedGroup] = useState<ConsumerGroup | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const fetchGroups = async () => {
     setLoading(true)
@@ -83,7 +85,7 @@ export default function ConsumerGroupsNative() {
             <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
             Refresh
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={() => setShowCreateModal(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Create Group
           </Button>
@@ -156,7 +158,7 @@ export default function ConsumerGroupsNative() {
             <div className="text-center py-8">
               <Users className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
               <p className="mt-4 text-muted-foreground">No consumer groups found. Create your first group to get started.</p>
-              <Button className="mt-4">
+              <Button className="mt-4" onClick={() => setShowCreateModal(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Group
               </Button>
@@ -177,7 +179,7 @@ export default function ConsumerGroupsNative() {
               </TableHeader>
               <TableBody>
                 {groups.map((group) => (
-                  <TableRow 
+                  <TableRow
                     key={group.id}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => {
@@ -200,8 +202,8 @@ export default function ConsumerGroupsNative() {
                     <TableCell>{new Date(group.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setSelectedGroup(group)
@@ -225,6 +227,13 @@ export default function ConsumerGroupsNative() {
         group={selectedGroup}
         open={showDetailModal}
         onOpenChange={setShowDetailModal}
+      />
+
+      {/* Create Consumer Group Modal */}
+      <CreateConsumerGroupModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onSuccess={fetchGroups}
       />
     </div>
   )

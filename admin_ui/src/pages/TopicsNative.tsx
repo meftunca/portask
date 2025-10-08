@@ -26,13 +26,13 @@ export default function TopicsNative() {
   const [topics, setTopics] = useState<Topic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Modal states
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  
+
   // Form state for create/edit
   const [formData, setFormData] = useState({
     name: '',
@@ -170,7 +170,7 @@ export default function TopicsNative() {
             <div className="text-center py-8">
               <GitBranch className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
               <p className="mt-4 text-muted-foreground">No topics found. Create your first topic to get started.</p>
-              <Button className="mt-4">
+              <Button className="mt-4" onClick={() => setShowCreateModal(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Topic
               </Button>
@@ -191,7 +191,7 @@ export default function TopicsNative() {
               </TableHeader>
               <TableBody>
                 {topics.map((topic) => (
-                  <TableRow 
+                  <TableRow
                     key={topic.name}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => {
@@ -212,8 +212,8 @@ export default function TopicsNative() {
                     <TableCell>{new Date(topic.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setSelectedTopic(topic)
@@ -222,8 +222,8 @@ export default function TopicsNative() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setSelectedTopic(topic)
@@ -379,8 +379,8 @@ export default function TopicsNative() {
             <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={async () => {
                 if (selectedTopic) {
                   try {
