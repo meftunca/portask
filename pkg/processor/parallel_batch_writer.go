@@ -59,7 +59,7 @@ func HighThroughputConfig() *ParallelBatchWriterConfig {
 	return &ParallelBatchWriterConfig{
 		NumShards:     32,
 		FlushInterval: 10 * time.Millisecond, // Optimal (5ms = too aggressive, causes 65% drop!)
-		BatchSize:     500, // Phase 8: Optimized from 100 to 500 (+11% throughput)
+		BatchSize:     500,                   // Phase 8: Optimized from 100 to 500 (+11% throughput)
 		MaxRetries:    3,
 	}
 }
