@@ -131,12 +131,21 @@ func (m *PortaskMessage) Reset() {
 	m.Payload = m.Payload[:0] // Keep capacity
 	m.Timestamp = 0
 
-	// Clear maps without recreating them
-	for k := range m.Headers {
-		delete(m.Headers, k)
+	// Initialize and clear maps
+	if m.Headers == nil {
+		m.Headers = make(MessageHeaders, 4)
+	} else {
+		for k := range m.Headers {
+			delete(m.Headers, k)
+		}
 	}
-	for k := range m.Metadata {
-		delete(m.Metadata, k)
+	
+	if m.Metadata == nil {
+		m.Metadata = make(map[string]string, 8)
+	} else {
+		for k := range m.Metadata {
+			delete(m.Metadata, k)
+		}
 	}
 
 	// Reset optional fields
