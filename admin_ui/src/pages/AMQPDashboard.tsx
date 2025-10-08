@@ -66,10 +66,22 @@ export default function AMQPDashboard() {
       const connectionsRes = await apiBase.get('/api/v1/connections')
       const connections = connectionsRes.data?.connections || []
 
+      // Fetch queues from backend
+      const queuesRes = await apiBase.get('/api/v1/amqp/queues')
+      const queuesList = queuesRes.data?.queues || []
+      
+      // Fetch exchanges
+      const exchangesRes = await apiBase.get('/api/v1/amqp/exchanges')
+      const exchangesList = exchangesRes.data?.exchanges || []
+      
+      // Fetch bindings
+      const bindingsRes = await apiBase.get('/api/v1/amqp/bindings')
+      const bindingsList = bindingsRes.data?.bindings || []
+
       setMetrics({
-        queues: 0, // TODO: Add queue list API
-        exchanges: 4,
-        bindings: 0,
+        queues: queuesList.length,
+        exchanges: exchangesList.length,
+        bindings: bindingsList.length,
         channels: connections.length,
         connections: connections.length,
         messagesPublished: data.network?.messages_sent || 0,
@@ -79,13 +91,15 @@ export default function AMQPDashboard() {
         deliverRate: data.network?.messages_received || 0
       })
 
-      // Sample queues - TODO: Replace with real API
-      const sampleQueues: QueueInfo[] = [
-        { name: 'orders', messages: 150, consumers: 2, state: 'running', durable: true },
-        { name: 'notifications', messages: 45, consumers: 1, state: 'running', durable: true },
-        { name: 'logs', messages: 0, consumers: 0, state: 'idle', durable: false }
-      ]
-      setQueues(sampleQueues)
+      // Convert real queue data to UI format
+      const realQueues: QueueInfo[] = queuesList.map((q: any) => ({
+        name: q.name || q.queue_name || 'unknown',
+        messages: q.message_count || q.messages || 0,
+        consumers: q.consumer_count || q.consumers || 0,
+        state: q.state || (q.consumers > 0 ? 'running' : 'idle'),
+        durable: q.durable !== undefined ? q.durable : true
+      }))
+      setQueues(realQueues)
 
       // Update publish history
       const now = new Date().toLocaleTimeString()

@@ -65,25 +65,29 @@ export default function KafkaDashboard() {
       const metricsRes = await apiBase.get('/metrics')
       const data = metricsRes.data
 
+      // Fetch consumer groups from backend
+      const groupsRes = await apiBase.get('/api/v1/kafka/consumer-groups')
+      const consumerGroups = groupsRes.data?.consumer_groups || []
+
       setMetrics({
         brokers: 1,
         topics: topics.length,
         partitions: topics.reduce((sum: number, t: any) => sum + (t.partitions || 0), 0),
-        consumerGroups: 0, // TODO: Add API endpoint
+        consumerGroups: consumerGroups.length,
         messagesPerSec: data.network?.messages_received || 0,
         bytesInPerSec: data.network?.bytes_read || 0,
         bytesOutPerSec: data.network?.bytes_written || 0,
         activeProducers: 0,
-        activeConsumers: 0
+        activeConsumers: consumerGroups.reduce((sum: number, g: any) => sum + (g.members?.length || 0), 0)
       })
 
-      // Format topic metrics
+      // Format topic metrics with real message counts
       const formattedTopics: TopicMetrics[] = topics.map((t: any) => ({
         name: t.name,
         partitions: t.partitions || 0,
-        messages: 0, // TODO: Add message count per topic
-        size: '0 MB',
-        throughput: 0
+        messages: t.message_count || 0, // Real message count from backend
+        size: t.total_bytes ? `${(t.total_bytes / 1024 / 1024).toFixed(2)} MB` : '0 MB',
+        throughput: 0 // Will be calculated from history
       }))
       setTopicMetrics(formattedTopics)
 

@@ -20,6 +20,7 @@ type WebSocketSubscription struct {
 	GroupID        string   `json:"group_id"`
 	ConnectedAt    string   `json:"connected_at"`
 	MessagesRecved int64    `json:"messages_received"`
+	Conn           *websocket.Conn `json:"-"` // Internal: WebSocket connection
 }
 
 // WSSubscribeRequest for subscribing to topics
@@ -169,8 +170,42 @@ func (wm *WebSocketManager) StreamMessage(topic string, msg interface{}) {
 	wm.mu.RLock()
 	defer wm.mu.RUnlock()
 
-	// TODO: Find all subscriptions for this topic and send message
-	log.Printf("[WS] Streaming message to topic: %s", topic)
+	// Find all subscriptions for this topic and send message
+	sentCount := 0
+	for _, sub := range wm.subscriptions {
+		// Check if this subscription includes the topic
+		topicMatches := false
+		for _, subscribedTopic := range sub.Topics {
+			if subscribedTopic == topic || subscribedTopic == "*" {
+				topicMatches = true
+				break
+			}
+		}
+		
+		if !topicMatches {
+			continue
+		}
+		
+		// Send message to this subscription's WebSocket
+		// Wrap message in envelope
+		envelope := fiber.Map{
+			"type":    "message",
+			"topic":   topic,
+			"message": msg,
+			"timestamp": time.Now().Format(time.RFC3339),
+		}
+		
+		// Send to WebSocket (using goroutine to avoid blocking)
+		go func(c *websocket.Conn) {
+			if err := c.WriteJSON(envelope); err != nil {
+				log.Printf("[WS] Failed to send message to client: %v", err)
+			}
+		}(sub.Conn)
+		
+		sentCount++
+	}
+	
+	log.Printf("[WS] Streamed message to topic %s: %d clients notified", topic, sentCount)
 }
 
 // Helper function to convert interface{} to JSON

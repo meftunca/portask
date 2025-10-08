@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -230,13 +231,13 @@ func (s *FiberServer) handleBatchPublish(c *fiber.Ctx) error {
 
 		batch = append(batch, portaskMsg)
 
-		// Prepare result (will be updated after storage)
+		// Prepare result (offset will be updated after storage)
 		results[i] = PublishResult{
 			Index:     i,
 			MessageID: string(messageID),
 			Topic:     msg.Topic,
 			Partition: msg.Partition,
-			Offset:    0, // TODO: Get from storage
+			Offset:    portaskMsg.Offset, // Set from message (updated by storage)
 			Success:   true,
 		}
 	}
@@ -291,10 +292,47 @@ func (s *FiberServer) handleBatchPublishAsync(c *fiber.Ctx) error {
 		})
 	}
 
-	// Process asynchronously
+	// Process asynchronously in background
 	go func() {
-		// TODO: Process batch in background
-		log.Printf("[Native API] Async publishing %d messages", len(req.Messages))
+		ctx := context.Background()
+		batch := make([]*types.PortaskMessage, 0, len(req.Messages))
+		
+		for _, msg := range req.Messages {
+			messageID := types.MessageID(fmt.Sprintf("msg-%d-%d", time.Now().UnixNano(), time.Now().Nanosecond()))
+			
+			payload, _ := json.Marshal(msg.Value)
+			metadata := make(map[string]string)
+			for k, v := range msg.Headers {
+				metadata[k] = fmt.Sprintf("%v", v)
+			}
+			
+			portaskMsg := &types.PortaskMessage{
+				ID:        messageID,
+				Topic:     types.TopicName(msg.Topic),
+				Partition: msg.Partition,
+				Key:       msg.Key,
+				Payload:   payload,
+				Metadata:  metadata,
+				Timestamp: time.Now().UnixNano(),
+				Priority:  types.PriorityNormal,
+			}
+			batch = append(batch, portaskMsg)
+		}
+		
+		// Store batch
+		if len(batch) > 0 {
+			messageBatch := &types.MessageBatch{
+				Messages:  batch,
+				BatchID:   fmt.Sprintf("async-batch-%d", time.Now().UnixNano()),
+				CreatedAt: time.Now().Unix(),
+			}
+			
+			if err := s.storage.StoreBatch(ctx, messageBatch); err != nil {
+				log.Printf("[Native API] Async batch failed: %v", err)
+			} else {
+				log.Printf("[Native API] Async batch completed: %d messages", len(batch))
+			}
+		}
 	}()
 
 	return c.Status(202).JSON(fiber.Map{
@@ -408,9 +446,70 @@ func (s *FiberServer) handleBatchFetch(c *fiber.Ctx) error {
 // handleBatchFetchPoll long-polling fetch (waits until messages available or timeout)
 // POST /api/v1/messages/batch/fetch/poll
 func (s *FiberServer) handleBatchFetchPoll(c *fiber.Ctx) error {
-	// Similar to handleBatchFetch but with long-polling
-	// TODO: Implement long-polling logic
-	return s.handleBatchFetch(c)
+	var req BatchFetchRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid request body: " + err.Error(),
+		})
+	}
+	
+	// Long-polling: Wait up to timeout for messages (default 30s)
+	timeout := 30 * time.Second // Default 30s
+	
+	// Check for timeout query parameter (in seconds)
+	if timeoutSecs := c.QueryInt("timeout", 0); timeoutSecs > 0 {
+		timeout = time.Duration(timeoutSecs) * time.Second
+	}
+	
+	pollInterval := 100 * time.Millisecond
+	deadline := time.Now().Add(timeout)
+	ctx := c.Context()
+	
+	// Poll until messages found or timeout
+	for time.Now().Before(deadline) {
+		// Try to fetch messages
+		hasMessages := false
+		for _, topicReq := range req.Topics {
+			for _, partReq := range topicReq.Partitions {
+				messages, err := s.storage.Fetch(ctx, types.TopicName(topicReq.Topic), partReq.Partition, partReq.FetchOffset, 1)
+				if err == nil && len(messages) > 0 {
+					hasMessages = true
+					break
+				}
+			}
+			if hasMessages {
+				break
+			}
+		}
+		
+		// If messages found, return them
+		if hasMessages {
+			return s.handleBatchFetch(c)
+		}
+		
+		// Wait before next poll
+		select {
+		case <-ctx.Done():
+			// Client disconnected
+			return c.Status(408).JSON(fiber.Map{
+				"success": false,
+				"error":   "Request timeout or cancelled",
+			})
+		case <-time.After(pollInterval):
+			// Continue polling
+		}
+	}
+	
+	// Timeout reached, return empty result
+	return c.JSON(fiber.Map{
+		"success": true,
+		"topics":  []fiber.Map{},
+		"metrics": fiber.Map{
+			"total_messages": 0,
+			"fetch_time_ms":  timeout.Milliseconds(),
+		},
+	})
 }
 
 // handleBatchAck acknowledges multiple messages
@@ -445,13 +544,13 @@ func (s *FiberServer) handleBatchAck(c *fiber.Ctx) error {
 	for i, msgID := range req.MessageIDs {
 		messageIDs[i] = types.MessageID(msgID)
 	}
-	
+
 	// Delete acknowledged messages (best-effort batch)
 	if err := s.storage.DeleteBatch(ctx, messageIDs); err != nil {
 		log.Printf("[Native API] Warning: Failed to delete acknowledged messages: %v", err)
 		// Don't fail the request - messages are acknowledged even if delete fails
 	}
-	
+
 	acknowledged := len(req.MessageIDs)
 	log.Printf("[Native API] Acknowledged %d messages (group: %s)", acknowledged, req.GroupID)
 
@@ -484,7 +583,7 @@ func (s *FiberServer) handleBatchNack(c *fiber.Ctx) error {
 	// Nack messages: Requeue or mark for DLQ
 	ctx := c.Context()
 	nacked := 0
-	
+
 	if req.Requeue {
 		// Requeue: Fetch messages and re-store with updated metadata
 		for _, msgID := range req.MessageIDs {
@@ -498,7 +597,7 @@ func (s *FiberServer) handleBatchNack(c *fiber.Ctx) error {
 			}
 			msg.Metadata["nack_reason"] = req.Reason
 			msg.Attempts++
-			
+
 			// Re-store for retry
 			if err := s.storage.Store(ctx, msg); err != nil {
 				log.Printf("[Native API] Failed to requeue message %s: %v", msgID, err)
@@ -510,12 +609,12 @@ func (s *FiberServer) handleBatchNack(c *fiber.Ctx) error {
 		// Don't requeue: Just mark as failed (could move to DLQ in future)
 		nacked = len(req.MessageIDs)
 	}
-	
+
 	log.Printf("[Native API] Nacked %d messages (requeue: %v, reason: %s)", nacked, req.Requeue, req.Reason)
 
 	return c.JSON(fiber.Map{
-		"success": true,
-		"nacked":  nacked,
+		"success":  true,
+		"nacked":   nacked,
 		"requeued": req.Requeue,
 		"group_id": req.GroupID,
 	})

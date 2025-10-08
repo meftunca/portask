@@ -32,10 +32,23 @@ func (tc *TransactionClient) Begin(ctx context.Context, timeoutMs int64, topics 
 		return nil, err
 	}
 
-	// TODO: Parse expiresAt string to time.Time
+	// Parse expiresAt string to time.Time
+	var expiresAt time.Time
+	if response.ExpiresAt != "" {
+		expiresAt, err = time.Parse(time.RFC3339, response.ExpiresAt)
+		if err != nil {
+			// Fallback: try parsing as Unix timestamp
+			var timestamp int64
+			if _, parseErr := fmt.Sscanf(response.ExpiresAt, "%d", &timestamp); parseErr == nil {
+				expiresAt = time.Unix(timestamp, 0)
+			}
+		}
+	}
+	
 	txn := &Transaction{
-		ID:    response.TransactionID,
-		State: response.State,
+		ID:        response.TransactionID,
+		State:     response.State,
+		ExpiresAt: expiresAt,
 	}
 
 	return txn, nil

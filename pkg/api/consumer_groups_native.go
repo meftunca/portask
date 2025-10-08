@@ -12,31 +12,11 @@ import (
 // ==================== UNIFIED NATIVE TYPES ====================
 // These types work for BOTH Kafka and AMQP translators
 
-// NativeConsumerGroup represents a unified consumer group
-type NativeConsumerGroup struct {
-	ID            string                  `json:"id"`
-	Name          string                  `json:"name"`
-	State         string                  `json:"state"` // Stable, Rebalancing, Dead, Empty
-	Protocol      string                  `json:"protocol"`
-	ProtocolType  string                  `json:"protocol_type"`
-	Leader        string                  `json:"leader"`
-	Generation    int32                   `json:"generation"`
-	Members       []NativeGroupMember     `json:"members"`
-	Subscriptions []string                `json:"subscriptions"` // Topics
-	CreatedAt     string                  `json:"created_at"`
-	UpdatedAt     string                  `json:"updated_at"`
-}
+// NativeConsumerGroup = ConsumerGroup (type alias for unified API)
+type NativeConsumerGroup = ConsumerGroup
 
-// NativeGroupMember represents a consumer group member
-type NativeGroupMember struct {
-	ID             string                      `json:"id"`
-	ClientID       string                      `json:"client_id"`
-	ClientHost     string                      `json:"client_host"`
-	SessionTimeout int32                       `json:"session_timeout_ms"`
-	Assignment     []NativePartitionAssignment `json:"assignment"`
-	JoinedAt       string                      `json:"joined_at"`
-	LastHeartbeat  string                      `json:"last_heartbeat"`
-}
+// NativeGroupMember = ConsumerGroupMember (type alias)
+type NativeGroupMember = ConsumerGroupMember
 
 // NativePartitionAssignment represents partition assignment
 type NativePartitionAssignment struct {
@@ -56,9 +36,9 @@ type CreateGroupRequest struct {
 
 // JoinGroupRequest for joining a consumer group
 type JoinGroupRequest struct {
-	MemberID       string `json:"member_id"`   // Empty on first join
+	MemberID       string `json:"member_id"` // Empty on first join
 	ClientID       string `json:"client_id" validate:"required"`
-	ClientHost     string `json:"client_host"` // Optional
+	ClientHost     string `json:"client_host"`        // Optional
 	SessionTimeout int32  `json:"session_timeout_ms"` // Default: 10000
 }
 
@@ -108,7 +88,7 @@ type OffsetMetadata struct {
 
 // ResetOffsetsRequest for resetting offsets
 type ResetOffsetsRequest struct {
-	Topics   []string `json:"topics"` // Empty = all topics
+	Topics   []string `json:"topics"`                       // Empty = all topics
 	Position string   `json:"position" validate:"required"` // "earliest" or "latest"
 }
 
@@ -164,8 +144,7 @@ func (s *FiberServer) handleCreateConsumerGroup(c *fiber.Ctx) error {
 		req.ProtocolType = "consumer"
 	}
 
-	// TODO: Get Kafka coordinator (or implement native consumer group manager)
-	// For now, return placeholder response
+	// Create consumer group (storage-backed)
 	group := NativeConsumerGroup{
 		ID:            req.Name,
 		Name:          req.Name,
@@ -179,6 +158,11 @@ func (s *FiberServer) handleCreateConsumerGroup(c *fiber.Ctx) error {
 		CreatedAt:     time.Now().Format(time.RFC3339),
 		UpdatedAt:     time.Now().Format(time.RFC3339),
 	}
+	
+	// Store in memory (in-memory coordinator)
+	s.groupsMutex.Lock()
+	s.consumerGroups[req.Name] = &group
+	s.groupsMutex.Unlock()
 
 	log.Printf("[Native API] Created consumer group: %s (topics: %v)", req.Name, req.Topics)
 
@@ -191,23 +175,13 @@ func (s *FiberServer) handleCreateConsumerGroup(c *fiber.Ctx) error {
 // handleListConsumerGroups lists all consumer groups
 // GET /api/v1/consumer-groups
 func (s *FiberServer) handleListConsumerGroups(c *fiber.Ctx) error {
-	// TODO: Get real groups from coordinator
-	// For now, return placeholder
-	groups := []NativeConsumerGroup{
-		{
-			ID:            "sample-group-1",
-			Name:          "sample-group-1",
-			State:         "Stable",
-			Protocol:      "range",
-			ProtocolType:  "consumer",
-			Leader:        "member-1",
-			Generation:    1,
-			Members:       []NativeGroupMember{},
-			Subscriptions: []string{"orders", "payments"},
-			CreatedAt:     time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-			UpdatedAt:     time.Now().Format(time.RFC3339),
-		},
+	// Get real groups from in-memory coordinator
+	s.groupsMutex.RLock()
+	groups := make([]NativeConsumerGroup, 0, len(s.consumerGroups))
+	for _, group := range s.consumerGroups {
+		groups = append(groups, *group)
 	}
+	s.groupsMutex.RUnlock()
 
 	log.Printf("[Native API] Listed consumer groups: %d groups", len(groups))
 
@@ -230,38 +204,23 @@ func (s *FiberServer) handleGetConsumerGroup(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Get real group from coordinator
-	group := NativeConsumerGroup{
-		ID:           groupID,
-		Name:         groupID,
-		State:        "Stable",
-		Protocol:     "range",
-		ProtocolType: "consumer",
-		Leader:       "member-1",
-		Generation:   1,
-		Members: []NativeGroupMember{
-			{
-				ID:             "member-1",
-				ClientID:       "client-1",
-				ClientHost:     "127.0.0.1",
-				SessionTimeout: 10000,
-				Assignment: []NativePartitionAssignment{
-					{Topic: "orders", Partitions: []int32{0, 1}},
-				},
-				JoinedAt:      time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
-				LastHeartbeat: time.Now().Format(time.RFC3339),
-			},
-		},
-		Subscriptions: []string{"orders"},
-		CreatedAt:     time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-		UpdatedAt:     time.Now().Format(time.RFC3339),
+	// Get real group from in-memory coordinator
+	s.groupsMutex.RLock()
+	group, exists := s.consumerGroups[groupID]
+	s.groupsMutex.RUnlock()
+	
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Consumer group '%s' not found", groupID),
+		})
 	}
 
 	log.Printf("[Native API] Got consumer group: %s", groupID)
 
 	return c.JSON(fiber.Map{
 		"success": true,
-		"group":   group,
+		"group":   *group,
 	})
 }
 
@@ -277,7 +236,11 @@ func (s *FiberServer) handleDeleteConsumerGroup(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Delete group from coordinator
+	// Delete group from in-memory coordinator
+	s.groupsMutex.Lock()
+	delete(s.consumerGroups, groupID)
+	s.groupsMutex.Unlock()
+	
 	log.Printf("[Native API] Deleted consumer group: %s", groupID)
 
 	return c.JSON(fiber.Map{
@@ -302,7 +265,14 @@ func (s *FiberServer) handleUpdateConsumerGroup(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Update group topics in coordinator
+	// Update group topics in in-memory coordinator
+	s.groupsMutex.Lock()
+	if group, exists := s.consumerGroups[groupID]; exists {
+		group.Subscriptions = req.Topics
+		group.UpdatedAt = time.Now().Format(time.RFC3339)
+	}
+	s.groupsMutex.Unlock()
+	
 	log.Printf("[Native API] Updated consumer group %s topics: %v", groupID, req.Topics)
 
 	return c.JSON(fiber.Map{
@@ -347,14 +317,37 @@ func (s *FiberServer) handleJoinConsumerGroup(c *fiber.Ctx) error {
 		memberID = fmt.Sprintf("%s-%d", req.ClientID, time.Now().UnixNano())
 	}
 
-	// TODO: Join group via coordinator
+	// Join group via in-memory coordinator
+	s.groupsMutex.Lock()
+	group, exists := s.consumerGroups[groupID]
+	if !exists {
+		s.groupsMutex.Unlock()
+		return c.Status(404).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Consumer group '%s' not found", groupID),
+		})
+	}
+	
+	// Add member
+	member := NativeGroupMember{
+		ID:             memberID,
+		ClientID:       req.ClientID,
+		ClientHost:     req.ClientHost,
+		SessionTimeout: int(req.SessionTimeout), // int32 -> int
+		JoinedAt:       time.Now().Format(time.RFC3339),
+		LastHeartbeat:  time.Now().Format(time.RFC3339),
+	}
+	group.Members = append(group.Members, member)
+	group.State = "Stable"
+	group.Generation++
+	group.UpdatedAt = time.Now().Format(time.RFC3339)
+	s.groupsMutex.Unlock()
+	
 	response := JoinGroupResponse{
 		MemberID:   memberID,
-		Generation: 1,
-		Leader:     false,
-		Assignment: []NativePartitionAssignment{
-			{Topic: "orders", Partitions: []int32{0}},
-		},
+		Generation: int32(group.Generation), // int -> int32
+		Leader:     len(group.Members) == 1, // First member is leader
+		Assignment: []NativePartitionAssignment{},
 	}
 
 	log.Printf("[Native API] Member %s joined group %s", memberID, groupID)
@@ -386,7 +379,23 @@ func (s *FiberServer) handleLeaveConsumerGroup(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Leave group via coordinator
+	// Leave group via in-memory coordinator
+	s.groupsMutex.Lock()
+	if group, exists := s.consumerGroups[groupID]; exists {
+		// Remove member
+		for i, member := range group.Members {
+			if member.ID == req.MemberID {
+				group.Members = append(group.Members[:i], group.Members[i+1:]...)
+				break
+			}
+		}
+		if len(group.Members) == 0 {
+			group.State = "Empty"
+		}
+		group.UpdatedAt = time.Now().Format(time.RFC3339)
+	}
+	s.groupsMutex.Unlock()
+	
 	log.Printf("[Native API] Member %s left group %s", req.MemberID, groupID)
 
 	return c.JSON(fiber.Map{
@@ -416,7 +425,19 @@ func (s *FiberServer) handleHeartbeat(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Send heartbeat via coordinator
+	// Send heartbeat via in-memory coordinator
+	s.groupsMutex.Lock()
+	if group, exists := s.consumerGroups[groupID]; exists {
+		// Update member's last heartbeat
+		for i, member := range group.Members {
+			if member.ID == req.MemberID {
+				group.Members[i].LastHeartbeat = time.Now().Format(time.RFC3339)
+				break
+			}
+		}
+	}
+	s.groupsMutex.Unlock()
+	
 	log.Printf("[Native API] Heartbeat from member %s in group %s (gen: %d)", req.MemberID, groupID, req.Generation)
 
 	return c.JSON(fiber.Map{
@@ -449,7 +470,7 @@ func (s *FiberServer) handleCommitOffsets(c *fiber.Ctx) error {
 	// Convert to ConsumerOffset and commit to storage
 	ctx := c.Context()
 	consumerOffsets := make([]*types.ConsumerOffset, 0, len(req.Offsets))
-	
+
 	for _, offsetReq := range req.Offsets {
 		consumerOffsets = append(consumerOffsets, &types.ConsumerOffset{
 			ConsumerID: types.ConsumerID(groupID),
@@ -460,7 +481,7 @@ func (s *FiberServer) handleCommitOffsets(c *fiber.Ctx) error {
 			Metadata:   offsetReq.Metadata,
 		})
 	}
-	
+
 	// Commit offsets to storage
 	if err := s.storage.CommitOffsetBatch(ctx, consumerOffsets); err != nil {
 		log.Printf("[Native API] Failed to commit offsets for group %s: %v", groupID, err)
@@ -469,7 +490,7 @@ func (s *FiberServer) handleCommitOffsets(c *fiber.Ctx) error {
 			"error":   fmt.Sprintf("Failed to commit offsets: %v", err),
 		})
 	}
-	
+
 	log.Printf("[Native API] Committed %d offsets to storage for group %s", len(req.Offsets), groupID)
 
 	return c.JSON(fiber.Map{
@@ -541,7 +562,7 @@ func (s *FiberServer) handleResetOffsets(c *fiber.Ctx) error {
 	ctx := c.Context()
 	topics := req.Topics
 	resetCount := 0
-	
+
 	// If no topics specified, get all topics for this consumer
 	if len(topics) == 0 {
 		consumerOffsets, err := s.storage.GetConsumerOffsets(ctx, types.ConsumerID(groupID))
@@ -555,7 +576,7 @@ func (s *FiberServer) handleResetOffsets(c *fiber.Ctx) error {
 			}
 		}
 	}
-	
+
 	// Reset offsets for each topic
 	for _, topic := range topics {
 		// Get partition count for topic
@@ -564,7 +585,7 @@ func (s *FiberServer) handleResetOffsets(c *fiber.Ctx) error {
 			log.Printf("[Native API] Failed to get partition count for topic %s: %v", topic, err)
 			continue
 		}
-		
+
 		// Reset each partition
 		for partition := int32(0); partition < partitionCount; partition++ {
 			var newOffset int64
@@ -573,12 +594,12 @@ func (s *FiberServer) handleResetOffsets(c *fiber.Ctx) error {
 			} else {
 				newOffset, err = s.storage.GetLatestOffset(ctx, types.TopicName(topic), partition)
 			}
-			
+
 			if err != nil {
 				log.Printf("[Native API] Failed to get %s offset for %s[%d]: %v", req.Position, topic, partition, err)
 				continue
 			}
-			
+
 			// Commit the reset offset
 			consumerOffset := &types.ConsumerOffset{
 				ConsumerID: types.ConsumerID(groupID),
@@ -588,12 +609,12 @@ func (s *FiberServer) handleResetOffsets(c *fiber.Ctx) error {
 				Timestamp:  time.Now().UnixNano(),
 				Metadata:   fmt.Sprintf("reset to %s", req.Position),
 			}
-			
+
 			if err := s.storage.CommitOffset(ctx, consumerOffset); err != nil {
 				log.Printf("[Native API] Failed to commit reset offset for %s[%d]: %v", topic, partition, err)
 				continue
 			}
-			
+
 			resetCount++
 		}
 	}
@@ -614,27 +635,38 @@ func (s *FiberServer) handleResetOffsets(c *fiber.Ctx) error {
 func (s *FiberServer) handleGetGroupLag(c *fiber.Ctx) error {
 	groupID := c.Params("id")
 
-	// TODO: Calculate real lag from storage
-	lags := []GroupLagInfo{
-		{
-			Topic:         "orders",
-			Partition:     0,
-			CurrentOffset: 100,
-			LogEndOffset:  105,
-			Lag:           5,
-		},
-		{
-			Topic:         "orders",
-			Partition:     1,
-			CurrentOffset: 150,
-			LogEndOffset:  160,
-			Lag:           10,
-		},
+	// Calculate real lag from storage
+	ctx := c.Context()
+	consumerOffsets, err := s.storage.GetConsumerOffsets(ctx, types.ConsumerID(groupID))
+	if err != nil {
+		log.Printf("[Native API] Failed to get offsets for group %s: %v", groupID, err)
+		consumerOffsets = []*types.ConsumerOffset{}
 	}
 
+	lags := []GroupLagInfo{}
 	totalLag := int64(0)
-	for _, lag := range lags {
-		totalLag += lag.Lag
+	
+	for _, offset := range consumerOffsets {
+		// Get latest offset for this topic/partition
+		latestOffset, err := s.storage.GetLatestOffset(ctx, offset.Topic, offset.Partition)
+		if err != nil {
+			continue
+		}
+		
+		lag := latestOffset - offset.Offset
+		if lag < 0 {
+			lag = 0
+		}
+		
+		lags = append(lags, GroupLagInfo{
+			Topic:         string(offset.Topic),
+			Partition:     offset.Partition,
+			CurrentOffset: offset.Offset,
+			LogEndOffset:  latestOffset,
+			Lag:           lag,
+		})
+		
+		totalLag += lag
 	}
 
 	log.Printf("[Native API] Got lag for group %s: total=%d", groupID, totalLag)
@@ -654,27 +686,24 @@ func (s *FiberServer) handleGetGroupLag(c *fiber.Ctx) error {
 func (s *FiberServer) handleListGroupMembers(c *fiber.Ctx) error {
 	groupID := c.Params("id")
 
-	// TODO: Get real members from coordinator
-	members := []NativeGroupMember{
-		{
-			ID:             "member-1",
-			ClientID:       "client-1",
-			ClientHost:     "127.0.0.1",
-			SessionTimeout: 10000,
-			Assignment: []NativePartitionAssignment{
-				{Topic: "orders", Partitions: []int32{0, 1}},
-			},
-			JoinedAt:      time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
-			LastHeartbeat: time.Now().Format(time.RFC3339),
-		},
+	// Get real members from in-memory coordinator
+	s.groupsMutex.RLock()
+	group, exists := s.consumerGroups[groupID]
+	s.groupsMutex.RUnlock()
+	
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Consumer group '%s' not found", groupID),
+		})
 	}
 
-	log.Printf("[Native API] Listed members for group %s: %d members", groupID, len(members))
+	log.Printf("[Native API] Listed members for group %s: %d members", groupID, len(group.Members))
 
 	return c.JSON(fiber.Map{
 		"success": true,
-		"members": members,
-		"count":   len(members),
+		"members": group.Members,
+		"count":   len(group.Members),
 	})
 }
 
@@ -683,13 +712,32 @@ func (s *FiberServer) handleListGroupMembers(c *fiber.Ctx) error {
 func (s *FiberServer) handleGetGroupState(c *fiber.Ctx) error {
 	groupID := c.Params("id")
 
-	// TODO: Get real state from coordinator
+	// Get real state from in-memory coordinator
+	s.groupsMutex.RLock()
+	group, exists := s.consumerGroups[groupID]
+	s.groupsMutex.RUnlock()
+	
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Consumer group '%s' not found", groupID),
+		})
+	}
+	
+	leader := ""
+	if len(group.Members) > 0 {
+		leader = group.Members[0].ID
+	}
+	
 	state := fiber.Map{
 		"group_id":   groupID,
-		"state":      "Stable",
-		"generation": 1,
-		"leader":     "member-1",
-		"members":    1,
+		"state":      group.State,
+		"generation": group.Generation,
+		"leader":     leader,
+		"members":    len(group.Members),
+		"protocol":   group.Protocol,
+		"created_at": group.CreatedAt,
+		"updated_at": group.UpdatedAt,
 	}
 
 	log.Printf("[Native API] Got state for group %s: %s", groupID, state["state"])
@@ -699,4 +747,3 @@ func (s *FiberServer) handleGetGroupState(c *fiber.Ctx) error {
 		"state":   state,
 	})
 }
-

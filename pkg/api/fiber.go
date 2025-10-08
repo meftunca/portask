@@ -30,6 +30,9 @@ type ConsumerGroup struct {
 	Name          string                 `json:"name"`
 	State         string                 `json:"state"`
 	Protocol      string                 `json:"protocol"`
+	ProtocolType  string                 `json:"protocol_type"`
+	Leader        string                 `json:"leader"`
+	Generation    int                    `json:"generation"`
 	Members       []ConsumerGroupMember  `json:"members"`
 	Subscriptions []string               `json:"subscriptions"`
 	Offsets       map[string]int64       `json:"offsets"`
@@ -40,11 +43,15 @@ type ConsumerGroup struct {
 
 // ConsumerGroupMember represents a member of a consumer group
 type ConsumerGroupMember struct {
-	ID         string   `json:"id"`
-	ClientID   string   `json:"client_id"`
-	Host       string   `json:"host"`
-	Topics     []string `json:"topics"`
-	AssignedAt string   `json:"assigned_at"`
+	ID             string   `json:"id"`
+	ClientID       string   `json:"client_id"`
+	ClientHost     string   `json:"client_host"`
+	Host           string   `json:"host"` // Deprecated, use ClientHost
+	SessionTimeout int      `json:"session_timeout"`
+	Topics         []string `json:"topics"`
+	AssignedAt     string   `json:"assigned_at"`
+	JoinedAt       string   `json:"joined_at"`
+	LastHeartbeat  string   `json:"last_heartbeat"`
 }
 
 // FiberServer provides REST API endpoints using Fiber v2

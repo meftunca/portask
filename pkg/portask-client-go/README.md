@@ -167,7 +167,20 @@ if err != nil {
 log.Printf("Transaction started: %s", txn.ID)
 
 // Publish messages in transaction
-// TODO: Add transaction ID to messages
+msg := &Message{
+    Topic:     "orders",
+    Partition: 0,
+    Key:       "order-123",
+    Value:     map[string]interface{}{"amount": 100, "status": "pending"},
+    Headers:   map[string]interface{}{"transaction_id": txn.ID}, // Add transaction ID to headers
+}
+
+err = client.Producer().Publish(ctx, msg)
+if err != nil {
+    // Abort transaction on error
+    _ = client.Transaction().Abort(ctx, txn.ID, "publish failed")
+    log.Fatal(err)
+}
 
 // Commit transaction
 err = client.Transaction().Commit(ctx, txn.ID)

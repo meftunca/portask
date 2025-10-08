@@ -26,7 +26,7 @@ import {
   Users
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-// import { apiBase } from '@/lib/api' // TODO: Use for real API calls
+import { apiBase } from '@/lib/api'
 
 interface ConsumerGroup {
   id: string
@@ -72,34 +72,30 @@ export default function ConsumerGroups() {
     setLoading(true)
     setError(null)
     try {
-      // TODO: Replace with actual API endpoint when backend implements it
-      // For now, show sample data
-      const sampleGroups: ConsumerGroup[] = [
-        {
-          id: 'consumer-group-1',
-          name: 'consumer-group-1',
-          state: 'Stable',
-          protocol: 'range',
-          protocolType: 'consumer',
-          members: [
-            {
-              id: 'consumer-1',
-              clientId: 'consumer-1',
-              clientHost: '/127.0.0.1',
-              metadata: 'consumer-1-metadata',
-              assignment: [
-                { topic: 'orders', partitions: [0, 1] },
-                { topic: 'payments', partitions: [0] }
-              ]
-            }
-          ]
-        }
-      ]
+      // Fetch real consumer groups from backend
+      const res = await apiBase.get('/api/v1/kafka/consumer-groups')
+      const backendGroups = res.data?.consumer_groups || []
 
-      setGroups(sampleGroups)
+      // Convert to UI format
+      const formattedGroups: ConsumerGroup[] = backendGroups.map((g: any) => ({
+        id: g.group_id || g.name,
+        name: g.name || g.group_id,
+        state: g.state || 'Stable',
+        protocol: g.protocol || 'range',
+        protocolType: g.protocol_type || 'consumer',
+        members: (g.members || []).map((m: any) => ({
+          id: m.member_id || m.id,
+          clientId: m.client_id || m.clientId || 'unknown',
+          clientHost: m.client_host || m.clientHost || 'unknown',
+          metadata: m.metadata || '',
+          assignment: m.assignment || []
+        }))
+      }))
 
-      if (sampleGroups.length > 0 && !selectedGroup) {
-        setSelectedGroup(sampleGroups[0].name)
+      setGroups(formattedGroups)
+
+      if (formattedGroups.length > 0 && !selectedGroup) {
+        setSelectedGroup(formattedGroups[0].name)
       }
     } catch (err) {
       setError('Failed to fetch consumer groups')
@@ -112,40 +108,45 @@ export default function ConsumerGroups() {
   // Fetch group details
   const fetchGroupDetails = async (groupName: string) => {
     try {
-      // TODO: Replace with actual API call
-      // GET /api/v1/kafka/consumer-groups/{groupName}
-      const group = groups.find(g => g.name === groupName)
-      setGroupDetails(group || null)
+      // Fetch real group details from backend
+      const res = await apiBase.get(`/api/v1/kafka/consumer-groups/${groupName}`)
+      const backendGroup = res.data?.consumer_group || res.data
 
-      // Fetch lag info
-      if (group) {
-        const sampleLag: GroupLag[] = [
-          {
-            group: groupName,
-            topic: 'orders',
-            partition: 0,
-            currentOffset: 1500,
-            logEndOffset: 1502,
-            lag: 2
-          },
-          {
-            group: groupName,
-            topic: 'orders',
-            partition: 1,
-            currentOffset: 3200,
-            logEndOffset: 3200,
-            lag: 0
-          },
-          {
-            group: groupName,
-            topic: 'payments',
-            partition: 0,
-            currentOffset: 890,
-            logEndOffset: 895,
-            lag: 5
-          }
-        ]
-        setGroupLag(sampleLag)
+      const group: ConsumerGroup = {
+        id: backendGroup.group_id || backendGroup.name,
+        name: backendGroup.name || backendGroup.group_id || groupName,
+        state: backendGroup.state || 'Stable',
+        protocol: backendGroup.protocol || 'range',
+        protocolType: backendGroup.protocol_type || 'consumer',
+        members: (backendGroup.members || []).map((m: any) => ({
+          id: m.member_id || m.id,
+          clientId: m.client_id || m.clientId || 'unknown',
+          clientHost: m.client_host || m.clientHost || 'unknown',
+          metadata: m.metadata || '',
+          assignment: m.assignment || []
+        }))
+      }
+      
+      setGroupDetails(group)
+
+      // Fetch lag info from backend
+      try {
+        const lagRes = await apiBase.get(`/api/v1/kafka/consumer-groups/${groupName}/lag`)
+        const backendLag = lagRes.data?.lag || []
+        
+        const formattedLag: GroupLag[] = backendLag.map((l: any) => ({
+          group: groupName,
+          topic: l.topic || 'unknown',
+          partition: l.partition || 0,
+          currentOffset: l.current_offset || l.currentOffset || 0,
+          logEndOffset: l.log_end_offset || l.logEndOffset || 0,
+          lag: l.lag || 0
+        }))
+        
+        setGroupLag(formattedLag)
+      } catch (lagErr) {
+        console.error('Failed to fetch group lag:', lagErr)
+        setGroupLag([])
       }
     } catch (err) {
       console.error('Failed to fetch group details:', err)

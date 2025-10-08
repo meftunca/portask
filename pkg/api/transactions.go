@@ -42,9 +42,9 @@ type BeginTransactionRequest struct {
 
 // BeginTransactionResponse after starting a transaction
 type BeginTransactionResponse struct {
-	TransactionID string    `json:"transaction_id"`
+	TransactionID string           `json:"transaction_id"`
 	State         TransactionState `json:"state"`
-	ExpiresAt     string    `json:"expires_at"`
+	ExpiresAt     string           `json:"expires_at"`
 }
 
 // CommitTransactionRequest for committing a transaction
@@ -237,4 +237,3 @@ func (s *FiberServer) handleDeleteTransaction(c *fiber.Ctx) error {
 		"message": fmt.Sprintf("Transaction '%s' deleted", txID),
 	})
 }
-
