@@ -10,7 +10,7 @@
 ## 🏆 Performance Highlights
 
 - **🚀 355K+ messages/second** throughput per storage backend
-- **⚡ Sub-millisecond** message processing latency  
+- **⚡ Sub-millisecond** message processing latency
 - **💯 100% reliability** - zero message loss
 - **🔄 Lock-free** MPMC queue implementation
 - **⚙️ Event-driven** workers (0% CPU when idle)
@@ -21,17 +21,20 @@
 ## ✨ Core Features
 
 ### Storage Backends
+
 - **DragonflyDB** - In-memory storage with Redis compatibility (355K msgs/sec)
 - **BadgerDB** - Pure Go embedded key-value store (207K msgs/sec)
 - **RocksDB** - High-performance persistent storage (218K msgs/sec)
 
 ### Parallel Batch Processing
+
 - **Connection Pool** - 1000 pre-warmed connections for zero overhead
 - **Parallel Sub-Batches** - Dynamic goroutine scaling (3-50 workers per batch)
 - **Optimal Batching** - 5000 messages per batch = 25 parallel goroutines
 - **Async Writes** - Fire-and-forget pattern, zero blocking
 
 ### Configuration Flexibility
+
 ```go
 config := processor.HighThroughputConfig()
 config.BatchSize = 5000        // User configurable (500-10000)
@@ -41,6 +44,7 @@ config.EnableParallelWrites = true  // Toggle parallel mode
 ```
 
 ### Protocol Support
+
 - **Kafka Wire Protocol** - Full compatibility with Kafka clients
 - **AMQP 0.9.1** - RabbitMQ compatible interface
 - **Native HTTP API** - RESTful endpoints
@@ -48,17 +52,17 @@ config.EnableParallelWrites = true  // Toggle parallel mode
 
 ## 🆚 Competitive Advantages
 
-| Feature | Portask v1.0 | Redis Queue (RQ) | Apache Kafka |
-|---------|--------------|------------------|--------------|
-| **Throughput** | 355K+ msg/sec | 400K-1M msg/sec | 1-3M msg/sec |
-| **Latency** | <10ms | 1-10ms | 1-5ms |
-| **Memory Usage** | Ultra-low | High | Medium |
-| **Setup Complexity** | Simple | Medium | Complex |
-| **Zero Message Loss** | ✅ | ✅ | ✅ |
-| **Multi-Priority** | ✅ | ❌ | ❌ |
-| **Parallel Batch Writes** | ✅ (92% boost) | ❌ | ✅ |
-| **Connection Pooling** | ✅ (1000 conns) | ✅ | ✅ |
-| **Admin UI** | ✅ | ❌ | ✅ |
+| Feature                   | Portask v1.0    | Redis Queue (RQ) | Apache Kafka |
+| ------------------------- | --------------- | ---------------- | ------------ |
+| **Throughput**            | 355K+ msg/sec   | 400K-1M msg/sec  | 1-3M msg/sec |
+| **Latency**               | <10ms           | 1-10ms           | 1-5ms        |
+| **Memory Usage**          | Ultra-low       | High             | Medium       |
+| **Setup Complexity**      | Simple          | Medium           | Complex      |
+| **Zero Message Loss**     | ✅              | ✅               | ✅           |
+| **Multi-Priority**        | ✅              | ❌               | ❌           |
+| **Parallel Batch Writes** | ✅ (92% boost)  | ❌               | ✅           |
+| **Connection Pooling**    | ✅ (1000 conns) | ✅               | ✅           |
+| **Admin UI**              | ✅              | ❌               | ✅           |
 
 ## 🚀 Quick Start
 
@@ -83,20 +87,20 @@ go build -ldflags="-s -w" -o build/portask ./cmd/server
 server:
   host: "localhost"
   port: 8080
-  
+
 storage:
-  type: "dragonfly"  # dragonfly, badgerdb, rocksdb
+  type: "dragonfly" # dragonfly, badgerdb, rocksdb
   addresses:
     - "localhost:6379"
-  pool_size: 1000      # Connection pool size
-  
+  pool_size: 1000 # Connection pool size
+
 batch_writer:
-  num_shards: 32               # Parallel shards (optimal: 32)
-  batch_size: 5000             # Messages per batch (optimal: 5000)
-  sub_batch_size: 200          # Parallel sub-batches (optimal: 200)
-  flush_interval: 10ms         # Flush interval (optimal: 10ms)
+  num_shards: 32 # Parallel shards (optimal: 32)
+  batch_size: 5000 # Messages per batch (optimal: 5000)
+  sub_batch_size: 200 # Parallel sub-batches (optimal: 200)
+  flush_interval: 10ms # Flush interval (optimal: 10ms)
   enable_parallel_writes: true # Connection pool parallelization
-  
+
 # Result: 355K+ msgs/sec with 25 parallel goroutines per batch!
 ```
 
@@ -110,7 +114,7 @@ package main
 import (
     "context"
     "log"
-    
+
     "github.com/meftunca/portask/pkg/client"
     "github.com/meftunca/portask/pkg/types"
 )
@@ -122,7 +126,7 @@ func main() {
         log.Fatal(err)
     }
     defer client.Close()
-    
+
     // Publish a high-priority message
     message := &types.PortaskMessage{
         ID:       "msg-001",
@@ -130,13 +134,13 @@ func main() {
         Priority: types.HighPriority,
         Payload:  []byte(`{"user_id": 123, "action": "login"}`),
     }
-    
+
     err = client.Publish(context.Background(), message)
     if err != nil {
         log.Printf("Failed to publish: %v", err)
         return
     }
-    
+
     log.Println("Message published successfully!")
 }
 ```
@@ -144,23 +148,26 @@ func main() {
 ### HTTP REST API
 
 #### Publish Message
+
 ```bash
 curl -X POST http://localhost:8080/api/v1/messages \
   -H "Content-Type: application/json" \
   -d '{
     "id": "msg-001",
-    "topic": "user.events", 
+    "topic": "user.events",
     "priority": "high",
     "payload": "{\"user_id\": 123, \"action\": \"login\"}"
   }'
 ```
 
 #### Subscribe to Topic
+
 ```bash
 curl -X GET "http://localhost:8080/api/v1/subscribe?topic=user.events&priority=high"
 ```
 
 #### Get Queue Statistics
+
 ```bash
 curl -X GET http://localhost:8080/api/v1/stats
 ```
@@ -169,31 +176,35 @@ curl -X GET http://localhost:8080/api/v1/stats
 
 ```javascript
 // Connect to Portask WebSocket
-const ws = new WebSocket('ws://localhost:8080/ws');
+const ws = new WebSocket("ws://localhost:8080/ws");
 
 // Subscribe to topic
-ws.send(JSON.stringify({
-    action: 'subscribe',
-    topic: 'user.events',
-    priority: 'high'
-}));
+ws.send(
+  JSON.stringify({
+    action: "subscribe",
+    topic: "user.events",
+    priority: "high",
+  })
+);
 
 // Receive messages
-ws.onmessage = function(event) {
-    const message = JSON.parse(event.data);
-    console.log('Received:', message);
+ws.onmessage = function (event) {
+  const message = JSON.parse(event.data);
+  console.log("Received:", message);
 };
 
 // Publish message
-ws.send(JSON.stringify({
-    action: 'publish',
+ws.send(
+  JSON.stringify({
+    action: "publish",
     message: {
-        id: 'msg-002',
-        topic: 'user.events',
-        priority: 'normal',
-        payload: JSON.stringify({user_id: 456, action: 'logout'})
-    }
-}));
+      id: "msg-002",
+      topic: "user.events",
+      priority: "normal",
+      payload: JSON.stringify({ user_id: 456, action: "logout" }),
+    },
+  })
+);
 ```
 
 ## 🌐 Language Clients
@@ -207,7 +218,7 @@ import json
 class PortaskClient:
     def __init__(self, base_url="http://localhost:8080"):
         self.base_url = base_url
-        
+
     def publish(self, topic, payload, priority="normal", message_id=None):
         message = {
             "topic": topic,
@@ -216,13 +227,13 @@ class PortaskClient:
         }
         if message_id:
             message["id"] = message_id
-            
+
         response = requests.post(
             f"{self.base_url}/api/v1/messages",
             json=message
         )
         return response.json()
-        
+
     def subscribe(self, topic, priority="normal"):
         response = requests.get(
             f"{self.base_url}/api/v1/subscribe",
@@ -238,41 +249,41 @@ client.publish("user.events", {"user_id": 123, "action": "login"}, "high")
 ### Node.js Client
 
 ```javascript
-const axios = require('axios');
+const axios = require("axios");
 
 class PortaskClient {
-    constructor(baseURL = 'http://localhost:8080') {
-        this.client = axios.create({ baseURL });
-    }
-    
-    async publish(topic, payload, priority = 'normal', id = null) {
-        const message = {
-            topic,
-            priority,
-            payload: typeof payload === 'object' ? JSON.stringify(payload) : payload
-        };
-        if (id) message.id = id;
-        
-        const response = await this.client.post('/api/v1/messages', message);
-        return response.data;
-    }
-    
-    async subscribe(topic, priority = 'normal') {
-        const response = await this.client.get('/api/v1/subscribe', {
-            params: { topic, priority }
-        });
-        return response.data;
-    }
-    
-    async getStats() {
-        const response = await this.client.get('/api/v1/stats');
-        return response.data;
-    }
+  constructor(baseURL = "http://localhost:8080") {
+    this.client = axios.create({ baseURL });
+  }
+
+  async publish(topic, payload, priority = "normal", id = null) {
+    const message = {
+      topic,
+      priority,
+      payload: typeof payload === "object" ? JSON.stringify(payload) : payload,
+    };
+    if (id) message.id = id;
+
+    const response = await this.client.post("/api/v1/messages", message);
+    return response.data;
+  }
+
+  async subscribe(topic, priority = "normal") {
+    const response = await this.client.get("/api/v1/subscribe", {
+      params: { topic, priority },
+    });
+    return response.data;
+  }
+
+  async getStats() {
+    const response = await this.client.get("/api/v1/stats");
+    return response.data;
+  }
 }
 
 // Usage
 const client = new PortaskClient();
-await client.publish('user.events', {user_id: 123, action: 'login'}, 'high');
+await client.publish("user.events", { user_id: 123, action: "login" }, "high");
 ```
 
 ## 📊 Monitoring & Admin UI
@@ -280,8 +291,9 @@ await client.publish('user.events', {user_id: 123, action: 'login'}, 'high');
 Access the web-based admin interface at: `http://localhost:8080/admin`
 
 ### Features:
+
 - **📈 Real-time Performance Metrics**
-- **📋 Queue Status & Statistics** 
+- **📋 Queue Status & Statistics**
 - **👥 Worker Pool Monitoring**
 - **🔍 Message Tracing & Debugging**
 - **⚙️ Dynamic Configuration**
@@ -293,7 +305,7 @@ Access the web-based admin interface at: `http://localhost:8080/admin`
 # Get detailed statistics
 curl http://localhost:8080/api/v1/stats | jq
 
-# Get worker pool status  
+# Get worker pool status
 curl http://localhost:8080/api/v1/workers | jq
 
 # Get queue metrics
@@ -318,6 +330,7 @@ RocksDB      | 218K msgs/sec  | <50ms   | Persistent
 ```
 
 **Batch Size Impact:**
+
 ```
 BatchSize | Goroutines | Throughput    | Improvement
 ----------|------------|---------------|------------
@@ -329,6 +342,7 @@ BatchSize | Goroutines | Throughput    | Improvement
 ```
 
 **Parallel Batch Write Impact:**
+
 ```
 Pure Batch Write (500 messages):
   Without Parallel: 49K msgs/sec
@@ -350,12 +364,13 @@ go test -v -run TestIntegratedParallelBatch ./benchmarks
 ```
 
 ### Ultra Performance Results
+
 ```
 🏆 ULTRA PERFORMANCE RESULTS:
 ════════════════════════════════════════
 ⏱️  Duration: 15.00 seconds
 📤 Messages Published: 31,052,832
-📊 Messages Processed: 31,052,832  
+📊 Messages Processed: 31,052,832
 🚀 Publish Rate: 2,069,784 msg/sec
 ⚡ Process Rate: 2,069,784 msg/sec
 💾 Throughput: 1,319.78 MB/sec
@@ -371,19 +386,19 @@ go test -v -run TestIntegratedParallelBatch ./benchmarks
 ```yaml
 # configs/ultra-config.yaml
 message_bus:
-  high_priority_queue_size: 524288     # 512K
-  normal_priority_queue_size: 8388608  # 8M
-  low_priority_queue_size: 262144      # 256K
-  
+  high_priority_queue_size: 524288 # 512K
+  normal_priority_queue_size: 8388608 # 8M
+  low_priority_queue_size: 262144 # 256K
+
 worker_pool:
-  worker_count: 64          # 8x CPU cores
-  batch_size: 4000          # Mega batches  
-  batch_timeout: "100ns"    # Ultra-ultra-fast
+  worker_count: 64 # 8x CPU cores
+  batch_size: 4000 # Mega batches
+  batch_timeout: "100ns" # Ultra-ultra-fast
   enable_profiling: false
-  
+
 performance:
-  enable_simd: true         # SIMD optimization
-  enable_zero_copy: true    # Zero-copy operations
+  enable_simd: true # SIMD optimization
+  enable_zero_copy: true # Zero-copy operations
   memory_pool_size: 1000000 # 1M pre-allocated objects
 ```
 
@@ -395,10 +410,10 @@ cluster:
   mode: "load_balancer"
   nodes:
     - "portask-1:8080"
-    - "portask-2:8080" 
+    - "portask-2:8080"
     - "portask-3:8080"
-  strategy: "round_robin"    # round_robin, least_connections, hash
-  
+  strategy: "round_robin" # round_robin, least_connections, hash
+
 health_check:
   interval: "30s"
   timeout: "5s"
@@ -444,17 +459,17 @@ spec:
         app: portask
     spec:
       containers:
-      - name: portask
-        image: portask:v1.0
-        ports:
-        - containerPort: 8080
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "1000m"
-          limits:
-            memory: "2Gi" 
-            cpu: "4000m"
+        - name: portask
+          image: portask:v1.0
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "1000m"
+            limits:
+              memory: "2Gi"
+              cpu: "4000m"
 ```
 
 ## 📈 Performance Tuning
@@ -522,14 +537,14 @@ go tool cover -html=coverage.out
 
 ### REST API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/messages` | Publish message |
-| GET | `/api/v1/subscribe` | Subscribe to topic |
-| GET | `/api/v1/stats` | Get system statistics |
-| GET | `/api/v1/queues` | Get queue metrics |
-| GET | `/api/v1/workers` | Get worker status |
-| GET | `/api/v1/health` | Health check |
+| Method | Endpoint            | Description           |
+| ------ | ------------------- | --------------------- |
+| POST   | `/api/v1/messages`  | Publish message       |
+| GET    | `/api/v1/subscribe` | Subscribe to topic    |
+| GET    | `/api/v1/stats`     | Get system statistics |
+| GET    | `/api/v1/queues`    | Get queue metrics     |
+| GET    | `/api/v1/workers`   | Get worker status     |
+| GET    | `/api/v1/health`    | Health check          |
 
 ### Message Format
 
@@ -550,6 +565,7 @@ go tool cover -html=coverage.out
 ### Common Issues
 
 **High Memory Usage**
+
 ```bash
 # Check memory statistics
 curl http://localhost:8080/api/v1/stats | jq '.memory'
@@ -559,6 +575,7 @@ export GOGC=50
 ```
 
 **CPU Usage Spikes**
+
 ```bash
 # Enable profiling
 curl http://localhost:8080/debug/pprof/profile > cpu.prof
@@ -566,6 +583,7 @@ go tool pprof cpu.prof
 ```
 
 **Connection Issues**
+
 ```bash
 # Check port binding
 netstat -tlnp | grep :8080
