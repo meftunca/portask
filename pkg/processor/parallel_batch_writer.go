@@ -48,8 +48,8 @@ type batchShard struct {
 func DefaultParallelBatchWriterConfig() *ParallelBatchWriterConfig {
 	return &ParallelBatchWriterConfig{
 		NumShards:     32,                   // 32 parallel writers (optimal from profiling)
-		FlushInterval: 5 * time.Millisecond,  // 5ms (faster flush for smaller batches)
-		BatchSize:     100,                   // 100 messages (OPTIMAL - 37K msgs/sec!)
+		FlushInterval: 5 * time.Millisecond, // 5ms (faster flush for smaller batches)
+		BatchSize:     100,                  // 100 messages (OPTIMAL - 37K msgs/sec!)
 		MaxRetries:    3,
 	}
 }

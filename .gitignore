@@ -86,3 +86,5 @@ admin_ui/.parcel-cache/
 
 # Build artifacts
 admin_ui/.vite/
+**/test_badger_data
+**/quick_badger_data
