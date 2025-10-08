@@ -32,9 +32,6 @@ func (s *FiberServer) handleSSEMetrics(c *fiber.Ctx) error {
 
 		for {
 			select {
-			case <-c.Context().Done():
-				// Client disconnected
-				return
 			case <-ticker.C:
 				// Collect metrics
 				uptime := time.Since(s.startTime)
@@ -123,8 +120,6 @@ func (s *FiberServer) handleSSEHealth(c *fiber.Ctx) error {
 
 		for {
 			select {
-			case <-c.Context().Done():
-				return
 			case <-ticker.C:
 				uptime := time.Since(s.startTime)
 				var m runtime.MemStats

@@ -91,20 +91,29 @@ export default function PortaskDashboard() {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        // Fetch health
-        const healthRes = await apiBase.get('/health')
-
-        // Fetch topics
-        const topicsRes = await apiBase.get('/api/v1/topics')
-
-        // Fetch consumer groups
-        const groupsRes = await apiBase.get('/api/v1/consumer-groups')
-
-        // Fetch transactions
-        const transactionsRes = await apiBase.get('/api/v1/transactions')
-
-        // Fetch system metrics
-        const metricsRes = await apiBase.get('/metrics')
+        // Fetch all data in parallel
+        const [healthRes, topicsRes, groupsRes, transactionsRes, metricsRes] = await Promise.all([
+          apiBase.get('/health').catch(err => {
+            console.error('[PortaskDashboard] Health fetch failed:', err.message)
+            return { data: { status: 'unknown', version: '2.0.0', uptime: 0 } }
+          }),
+          apiBase.get('/api/v1/topics').catch(err => {
+            console.error('[PortaskDashboard] Topics fetch failed:', err.message)
+            return { data: { count: 0, topics: [] } }
+          }),
+          apiBase.get('/api/v1/consumer-groups').catch(err => {
+            console.error('[PortaskDashboard] Consumer groups fetch failed:', err.message)
+            return { data: { count: 0, groups: [] } }
+          }),
+          apiBase.get('/api/v1/transactions').catch(err => {
+            console.error('[PortaskDashboard] Transactions fetch failed:', err.message)
+            return { data: { count: 0, transactions: [] } }
+          }),
+          apiBase.get('/metrics').catch(err => {
+            console.error('[PortaskDashboard] Metrics fetch failed:', err.message)
+            return { data: { core: {}, system: {}, network: {} } }
+          })
+        ])
 
         setMetrics({
           health: {
@@ -142,8 +151,8 @@ export default function PortaskDashboard() {
           }]
           return newData.slice(-20) // Keep last 20 points
         })
-      } catch (error) {
-        console.error('[PortaskDashboard] Error fetching metrics:', error)
+      } catch (error: any) {
+        console.error('[PortaskDashboard] Unexpected error fetching metrics:', error?.message || error)
       }
     }
 
