@@ -26,6 +26,7 @@
 - **BadgerDB** - Pure Go embedded key-value store (207K msgs/sec)
 - **RocksDB** - High-performance persistent storage (218K msgs/sec)
 - **DuckDB** - Analytics-grade column-store with ultra-fast batch inserts (NEW! 🦆)
+  - ⚠️ Requires Apache Arrow C++ library: `brew install apache-arrow`
 
 ### Parallel Batch Processing
 

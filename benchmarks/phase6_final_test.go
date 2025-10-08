@@ -127,12 +127,9 @@ func TestPhase6Final(t *testing.T) {
 
 	t.Run("Complete_Journey_Summary", func(t *testing.T) {
 		t.Logf("")
-		t.Logf("=" + string(make([]byte, 60)) + "=")
-		for i := range string(make([]byte, 61)) {
-			_ = i
-		}
+		t.Logf("============================================================")
 		t.Logf("🎯 COMPLETE OPTIMIZATION JOURNEY")
-		t.Logf("=" + string(make([]byte, 60)) + "=")
+		t.Logf("============================================================")
 		t.Logf("")
 		t.Logf("Phase 0: Baseline")
 		t.Logf("  Throughput: 163,000 msgs/sec")
@@ -171,7 +168,7 @@ func TestPhase6Final(t *testing.T) {
 		t.Logf("  Async Pattern: Enabled")
 		t.Logf("  Command Reduction: Enabled")
 		t.Logf("")
-		t.Logf("=" + string(make([]byte, 60)) + "=")
+		t.Logf("============================================================")
 		t.Logf("")
 		t.Logf("🎓 Key Learnings:")
 		t.Logf("  1. Profile before optimizing")

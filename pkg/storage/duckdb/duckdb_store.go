@@ -38,11 +38,11 @@ type Config struct {
 	DataDir string
 
 	// Performance tuning (FASTEST settings!)
-	EnableCompression bool // Default: true (zstd compression)
+	EnableCompression bool   // Default: true (zstd compression)
 	MemoryLimit       string // Default: "2GB"
-	Threads           int  // Default: CPU count
-	EnableWAL         bool // Default: false (FASTEST - no durability!)
-	
+	Threads           int    // Default: CPU count
+	EnableWAL         bool   // Default: false (FASTEST - no durability!)
+
 	// Batch settings
 	EnableBatchInsert bool // Default: true
 	BatchSize         int  // Default: 1000
@@ -435,4 +435,3 @@ func (d *DuckDBStore) GetMetrics() map[string]int64 {
 		"bytes_read":       d.bytesRead.Load(),
 	}
 }
-
