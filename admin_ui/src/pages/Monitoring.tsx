@@ -2,13 +2,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api } from '@/lib/api'
+import { useMetricsSSE } from '@/hooks/useSSE'
 import {
   Activity,
   AlertTriangle,
   Cpu,
   Database,
   MemoryStick,
-  RefreshCw
+  RefreshCw,
+  Wifi,
+  WifiOff
 } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import {
@@ -51,6 +54,27 @@ const Monitoring: React.FC = () => {
   const [alerts, setAlerts] = useState<AlertMetric[]>([])
   const [loading, setLoading] = useState(true)
   const [realTimeMode, setRealTimeMode] = useState(false)
+
+  // Use SSE for real-time metrics
+  const { data: sseData, isConnected: sseConnected } = useMetricsSSE()
+
+  // Update metrics from SSE
+  useEffect(() => {
+    if (sseData && sseConnected) {
+      const currentTime = new Date().toISOString()
+      const newMetric: SystemMetrics = {
+        timestamp: currentTime,
+        cpu: ((sseData as any).system?.num_goroutines || 0) / 10, // Approximate CPU from goroutines
+        memory: (sseData as any).system?.alloc_mb || 0,
+        disk: ((sseData as any).storage?.storage_used_bytes || 0) / (1024 * 1024), // Convert to MB
+        messagesPerSecond: (sseData as any).network?.messages_received || 0,
+        activeConnections: (sseData as any).network?.connections_active || 0,
+        queueSize: (sseData as any).storage?.total_messages || 0
+      }
+
+      setMetrics(prev => [...prev.slice(-49), newMetric]) // Keep last 50 data points
+    }
+  }, [sseData, sseConnected])
 
   useEffect(() => {
     // Gerçek API'den veri çek
@@ -178,8 +202,19 @@ const Monitoring: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">System Monitoring</h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground flex items-center gap-2">
             Real-time system metrics and performance monitoring
+            {sseConnected ? (
+              <Badge variant="default" className="gap-1">
+                <Wifi className="h-3 w-3" />
+                Live
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1">
+                <WifiOff className="h-3 w-3" />
+                Polling
+              </Badge>
+            )}
           </p>
         </div>
         <div className="flex items-center space-x-2">

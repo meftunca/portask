@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { apiBase } from '@/lib/api'
+import { useMetricsSSE } from '@/hooks/useSSE'
 import {
   Blocks,
   Clock,
@@ -10,7 +11,9 @@ import {
   MessageSquare,
   Server,
   TrendingUp,
-  Users
+  Users,
+  Wifi,
+  WifiOff
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -53,6 +56,38 @@ export default function PortaskDashboard() {
 
   const [chartData, setChartData] = useState<Array<{ time: string; messages: number; latency: number }>>([])
 
+  // Use SSE for real-time metrics
+  const { data: sseData, isConnected: sseConnected } = useMetricsSSE()
+
+  // Update metrics from SSE if available
+  useEffect(() => {
+    if (sseData && sseConnected) {
+      console.log('[PortaskDashboard] SSE data received:', sseData)
+      
+      // Update performance metrics from SSE
+      setMetrics(prev => ({
+        ...prev,
+        performance: {
+          messages_per_sec: (sseData as any).network?.messages_received || 0,
+          avg_latency_ms: (sseData as any).core?.avg_latency_ms || 0,
+          memory_mb: (sseData as any).system?.alloc_mb || 0
+        }
+      }))
+
+      // Update chart data
+      const now = new Date().toLocaleTimeString()
+      setChartData(prev => {
+        const newData = [...prev, {
+          time: now,
+          messages: (sseData as any).storage?.total_messages || 0,
+          latency: (sseData as any).core?.avg_latency_ms || 0
+        }]
+        return newData.slice(-20)
+      })
+    }
+  }, [sseData, sseConnected])
+
+  // Fallback: HTTP polling for initial data and non-real-time metrics
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
@@ -113,9 +148,12 @@ export default function PortaskDashboard() {
     }
 
     fetchMetrics()
-    const interval = setInterval(fetchMetrics, 5000) // Refresh every 5 seconds
-    return () => clearInterval(interval)
-  }, [])
+    // Only poll if SSE is not connected
+    const interval = sseConnected ? null : setInterval(fetchMetrics, 10000) // Refresh every 10 seconds
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [sseConnected])
 
   const formatUptime = (seconds: number) => {
     if (seconds < 60) return `${Math.round(seconds)}s`
@@ -196,8 +234,19 @@ export default function PortaskDashboard() {
       <div className="flex items-center justify-between space-y-2">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Portask Dashboard</h2>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground flex items-center gap-2">
             Unified message queue system overview
+            {sseConnected ? (
+              <Badge variant="default" className="gap-1 ml-2">
+                <Wifi className="h-3 w-3" />
+                Live Updates
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1 ml-2">
+                <WifiOff className="h-3 w-3" />
+                Polling Mode
+              </Badge>
+            )}
           </p>
         </div>
         <div className="flex items-center space-x-2">

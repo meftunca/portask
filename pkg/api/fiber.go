@@ -218,8 +218,13 @@ func (s *FiberServer) setupRoutes() {
 	v1.Get("/metrics", s.handleMetricsFiber)
 	v1.Get("/status", s.handleStatusFiber)
 
-	// WebSocket endpoint for v1
+	// WebSocket endpoint for v1 (legacy)
 	v1.Get("/ws", websocket.New(s.handleWebSocketConnection))
+
+	// SSE (Server-Sent Events) endpoints - Better for one-way communication
+	sse := v1.Group("/sse")
+	sse.Get("/metrics", s.handleSSEMetrics)  // Real-time metrics stream
+	sse.Get("/health", s.handleSSEHealth)    // Real-time health stream
 
 	// Message endpoints
 	v1.Get("/messages", s.handleMessagesFiber)
@@ -242,53 +247,53 @@ func (s *FiberServer) setupRoutes() {
 	// ==================== UNIFIED NATIVE API ====================
 	// Consumer Groups (Unified for Kafka + AMQP)
 	consumerGroups := v1.Group("/consumer-groups")
-	consumerGroups.Post("/", s.handleCreateConsumerGroup)                    // Create group
-	consumerGroups.Get("/", s.handleListConsumerGroups)                      // List groups
-	consumerGroups.Get("/:id", s.handleGetConsumerGroup)                     // Get group
-	consumerGroups.Delete("/:id", s.handleDeleteConsumerGroup)               // Delete group
-	consumerGroups.Put("/:id", s.handleUpdateConsumerGroup)                  // Update group topics
-	consumerGroups.Post("/:id/join", s.handleJoinConsumerGroup)              // Join group
-	consumerGroups.Post("/:id/leave", s.handleLeaveConsumerGroup)            // Leave group
-	consumerGroups.Post("/:id/heartbeat", s.handleHeartbeat)                 // Heartbeat
-	consumerGroups.Get("/:id/offsets", s.handleFetchOffsets)                 // Fetch offsets
-	consumerGroups.Post("/:id/offsets/commit", s.handleCommitOffsets)        // Commit offsets
-	consumerGroups.Post("/:id/offsets/reset", s.handleResetOffsets)          // Reset offsets
-	consumerGroups.Get("/:id/lag", s.handleGetGroupLag)                      // Get lag
-	consumerGroups.Get("/:id/members", s.handleListGroupMembers)             // List members
-	consumerGroups.Get("/:id/state", s.handleGetGroupState)                  // Get state
+	consumerGroups.Post("/", s.handleCreateConsumerGroup)             // Create group
+	consumerGroups.Get("/", s.handleListConsumerGroups)               // List groups
+	consumerGroups.Get("/:id", s.handleGetConsumerGroup)              // Get group
+	consumerGroups.Delete("/:id", s.handleDeleteConsumerGroup)        // Delete group
+	consumerGroups.Put("/:id", s.handleUpdateConsumerGroup)           // Update group topics
+	consumerGroups.Post("/:id/join", s.handleJoinConsumerGroup)       // Join group
+	consumerGroups.Post("/:id/leave", s.handleLeaveConsumerGroup)     // Leave group
+	consumerGroups.Post("/:id/heartbeat", s.handleHeartbeat)          // Heartbeat
+	consumerGroups.Get("/:id/offsets", s.handleFetchOffsets)          // Fetch offsets
+	consumerGroups.Post("/:id/offsets/commit", s.handleCommitOffsets) // Commit offsets
+	consumerGroups.Post("/:id/offsets/reset", s.handleResetOffsets)   // Reset offsets
+	consumerGroups.Get("/:id/lag", s.handleGetGroupLag)               // Get lag
+	consumerGroups.Get("/:id/members", s.handleListGroupMembers)      // List members
+	consumerGroups.Get("/:id/state", s.handleGetGroupState)           // Get state
 
 	// Batch Operations (Unified for Kafka + AMQP)
 	messages := v1.Group("/messages")
 	batchMessages := messages.Group("/batch")
-	batchMessages.Post("/publish", s.handleBatchPublish)                     // Batch publish
-	batchMessages.Post("/publish/async", s.handleBatchPublishAsync)          // Async batch publish
-	batchMessages.Post("/fetch", s.handleBatchFetch)                         // Batch fetch
-	batchMessages.Post("/fetch/poll", s.handleBatchFetchPoll)                // Long-polling fetch
-	batchMessages.Post("/ack", s.handleBatchAck)                             // Batch acknowledge
-	batchMessages.Post("/nack", s.handleBatchNack)                           // Batch negative ack
+	batchMessages.Post("/publish", s.handleBatchPublish)            // Batch publish
+	batchMessages.Post("/publish/async", s.handleBatchPublishAsync) // Async batch publish
+	batchMessages.Post("/fetch", s.handleBatchFetch)                // Batch fetch
+	batchMessages.Post("/fetch/poll", s.handleBatchFetchPoll)       // Long-polling fetch
+	batchMessages.Post("/ack", s.handleBatchAck)                    // Batch acknowledge
+	batchMessages.Post("/nack", s.handleBatchNack)                  // Batch negative ack
 
 	// WebSocket Real-Time Consumption (handled above with websocket.New)
 
 	// Transactions (Unified for Kafka + AMQP)
 	transactions := v1.Group("/transactions")
-	transactions.Post("/begin", s.handleBeginTransaction)                    // Begin transaction
-	transactions.Post("/commit", s.handleCommitTransaction)                  // Commit transaction
-	transactions.Post("/abort", s.handleAbortTransaction)                    // Abort transaction
-	transactions.Get("/", s.handleListTransactions)                          // List transactions
-	transactions.Get("/:id", s.handleGetTransactionStatus)                   // Get transaction status
-	transactions.Delete("/:id", s.handleDeleteTransaction)                   // Delete transaction
+	transactions.Post("/begin", s.handleBeginTransaction)   // Begin transaction
+	transactions.Post("/commit", s.handleCommitTransaction) // Commit transaction
+	transactions.Post("/abort", s.handleAbortTransaction)   // Abort transaction
+	transactions.Get("/", s.handleListTransactions)         // List transactions
+	transactions.Get("/:id", s.handleGetTransactionStatus)  // Get transaction status
+	transactions.Delete("/:id", s.handleDeleteTransaction)  // Delete transaction
 
 	// Topics Management (Unified for Kafka + AMQP)
 	topics := v1.Group("/topics")
-	topics.Post("/", s.handleCreateTopic)                                    // Create topic
-	topics.Get("/", s.handleListTopics)                                      // List topics
-	topics.Get("/:name", s.handleGetTopic)                                   // Get topic
-	topics.Put("/:name", s.handleUpdateTopic)                                // Update topic
-	topics.Delete("/:name", s.handleDeleteTopic)                             // Delete topic
-	topics.Get("/:name/stats", s.handleGetTopicStats)                        // Get topic stats
-	topics.Get("/:name/partitions", s.handleGetTopicPartitions)              // Get partitions
-	topics.Post("/:name/compact", s.handleCompactTopic)                      // Compact topic
-	topics.Post("/:name/purge", s.handlePurgeTopic)                          // Purge topic
+	topics.Post("/", s.handleCreateTopic)                       // Create topic
+	topics.Get("/", s.handleListTopics)                         // List topics
+	topics.Get("/:name", s.handleGetTopic)                      // Get topic
+	topics.Put("/:name", s.handleUpdateTopic)                   // Update topic
+	topics.Delete("/:name", s.handleDeleteTopic)                // Delete topic
+	topics.Get("/:name/stats", s.handleGetTopicStats)           // Get topic stats
+	topics.Get("/:name/partitions", s.handleGetTopicPartitions) // Get partitions
+	topics.Post("/:name/compact", s.handleCompactTopic)         // Compact topic
+	topics.Post("/:name/purge", s.handlePurgeTopic)             // Purge topic
 
 	// ==================== PROTOCOL COMPATIBILITY ====================
 	// Kafka endpoints (for protocol stats)
