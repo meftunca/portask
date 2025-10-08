@@ -52,7 +52,6 @@ export default function PortaskDashboard() {
   })
 
   const [chartData, setChartData] = useState<Array<{ time: string; messages: number; latency: number }>>([])
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchMetrics = async () => {
@@ -108,11 +107,8 @@ export default function PortaskDashboard() {
           }]
           return newData.slice(-20) // Keep last 20 points
         })
-
-        setLoading(false)
       } catch (error) {
         console.error('[PortaskDashboard] Error fetching metrics:', error)
-        setLoading(false)
       }
     }
 

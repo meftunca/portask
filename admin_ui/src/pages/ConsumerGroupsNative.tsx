@@ -27,7 +27,7 @@ export default function ConsumerGroupsNative() {
     setError(null)
     try {
       const response = await apiBase.get('/api/v1/consumer-groups')
-      
+
       if (response.data?.success) {
         setGroups(response.data.groups || [])
       } else {

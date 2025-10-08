@@ -1,22 +1,21 @@
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import {
+  BarChart3,
+  Blocks,
+  Database,
+  GitBranch,
+  Home,
+  Menu,
+  MessageSquare,
+  Rabbit,
+  Settings,
+  Users,
+  X,
+  Zap
+} from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { 
-  BarChart3, 
-  Database, 
-  Home, 
-  MessageSquare, 
-  Network, 
-  Settings,
-  Menu,
-  X,
-  Users,
-  Zap,
-  Rabbit,
-  GitBranch,
-  Blocks
-} from 'lucide-react'
 
 interface LayoutProps {
   children: React.ReactNode

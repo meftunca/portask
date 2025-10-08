@@ -29,7 +29,7 @@ export default function TopicsNative() {
     setError(null)
     try {
       const response = await apiBase.get('/api/v1/topics')
-      
+
       if (response.data?.success) {
         setTopics(response.data.topics || [])
       } else {

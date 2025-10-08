@@ -27,7 +27,7 @@ export default function TransactionsNative() {
     setError(null)
     try {
       const response = await apiBase.get('/api/v1/transactions')
-      
+
       if (response.data?.success) {
         setTransactions(response.data.transactions || [])
       } else {
