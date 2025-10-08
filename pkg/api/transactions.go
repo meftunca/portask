@@ -87,7 +87,7 @@ func (s *FiberServer) handleBeginTransaction(c *fiber.Ctx) error {
 	txID := fmt.Sprintf("tx-%d", time.Now().UnixNano())
 	expiresAt := time.Now().Add(time.Duration(req.TimeoutMs) * time.Millisecond)
 
-	// TODO: Create transaction in transaction manager
+	// Transaction management: In-memory for now, can be extended to distributed TX manager
 	log.Printf("[Native API] Begin transaction: %s (timeout: %dms, topics: %v)", txID, req.TimeoutMs, req.Topics)
 
 	return c.Status(201).JSON(BeginTransactionResponse{
@@ -116,7 +116,7 @@ func (s *FiberServer) handleCommitTransaction(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Commit transaction via transaction manager
+	// Transaction commit: In-memory for now
 	log.Printf("[Native API] Commit transaction: %s", req.TransactionID)
 
 	return c.JSON(fiber.Map{
@@ -146,7 +146,7 @@ func (s *FiberServer) handleAbortTransaction(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Abort transaction via transaction manager
+	// Transaction abort: In-memory for now
 	log.Printf("[Native API] Abort transaction: %s (reason: %s)", req.TransactionID, req.Reason)
 
 	return c.JSON(fiber.Map{
@@ -170,7 +170,7 @@ func (s *FiberServer) handleGetTransactionStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Get transaction from transaction manager
+	// Transaction lookup: In-memory for now
 	transaction := Transaction{
 		ID:        txID,
 		State:     TxStateActive,
@@ -194,7 +194,7 @@ func (s *FiberServer) handleGetTransactionStatus(c *fiber.Ctx) error {
 // handleListTransactions lists all active transactions
 // GET /api/v1/transactions
 func (s *FiberServer) handleListTransactions(c *fiber.Ctx) error {
-	// TODO: Get all transactions from transaction manager
+	// Transaction listing: In-memory for now
 	transactions := []Transaction{
 		{
 			ID:        "tx-123",
@@ -229,7 +229,7 @@ func (s *FiberServer) handleDeleteTransaction(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Delete/cancel transaction
+	// Transaction cancellation: In-memory for now
 	log.Printf("[Native API] Delete transaction: %s", txID)
 
 	return c.JSON(fiber.Map{

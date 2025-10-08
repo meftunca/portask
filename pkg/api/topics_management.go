@@ -340,20 +340,47 @@ func (s *FiberServer) handleDeleteTopic(c *fiber.Ctx) error {
 // GET /api/v1/topics/:name/stats
 func (s *FiberServer) handleGetTopicStats(c *fiber.Ctx) error {
 	topicName := c.Params("name")
+	ctx := c.Context()
 
-	// TODO: Get stats from storage
-	stats := TopicStats{
-		Name:         topicName,
-		Partitions:   3,
-		MessageCount: 1000,
-		TotalBytes:   1024000,
-		FirstOffset:  0,
-		LastOffset:   1000,
-		Replicas:     1,
-		ISR:          1,
+	// Get topic info from storage
+	topicInfo, err := s.storage.GetTopicInfo(ctx, types.TopicName(topicName))
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Topic '%s' not found", topicName),
+		})
 	}
 
-	log.Printf("[Native API] Got topic stats: %s (messages: %d)", topicName, stats.MessageCount)
+	// Get partition count and calculate stats
+	partitionCount := topicInfo.Partitions
+	totalMessages := int64(0)
+	totalBytes := int64(0)
+	firstOffset := int64(0)
+	lastOffset := int64(0)
+
+	// Get first and last offset from first partition (as approximation)
+	if partitionCount > 0 {
+		firstOffset, _ = s.storage.GetEarliestOffset(ctx, types.TopicName(topicName), 0)
+		lastOffset, _ = s.storage.GetLatestOffset(ctx, types.TopicName(topicName), 0)
+		
+		// Calculate total messages as rough estimate (last - first)
+		totalMessages = lastOffset - firstOffset
+		// Estimate bytes (assume average 1KB per message)
+		totalBytes = totalMessages * 1024
+	}
+
+	stats := TopicStats{
+		Name:         topicName,
+		Partitions:   int(partitionCount),
+		MessageCount: totalMessages,
+		TotalBytes:   totalBytes,
+		FirstOffset:  firstOffset,
+		LastOffset:   lastOffset,
+		Replicas:     int(topicInfo.ReplicationFactor),
+		ISR:          int(topicInfo.ReplicationFactor), // Assume all replicas in-sync
+	}
+
+	log.Printf("[Native API] Got topic stats from storage: %s (messages: %d, bytes: %d)", topicName, stats.MessageCount, stats.TotalBytes)
 
 	return c.JSON(fiber.Map{
 		"success": true,
