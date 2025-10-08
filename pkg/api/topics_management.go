@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -67,19 +68,37 @@ type TopicStats struct {
 // handleCreateTopic creates a new topic
 // POST /api/v1/topics
 func (s *FiberServer) handleCreateTopic(c *fiber.Ctx) error {
+	// Parse request body
 	var req CreateTopicRequest
-	if err := c.BodyParser(&req); err != nil {
+	body := c.Body()
+	
+	// Return debug info temporarily
+	bodyStr := string(body)
+	fmt.Printf("[CreateTopic DEBUG] Raw body: %s\n", bodyStr)
+	
+	if len(body) == 0 {
 		return c.Status(400).JSON(fiber.Map{
 			"success": false,
-			"error":   "Invalid request body: " + err.Error(),
+			"error":   "Empty request body",
 		})
 	}
+
+	// Use standard json.Unmarshal instead of BodyParser
+	if err := json.Unmarshal(body, &req); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid JSON: " + err.Error(),
+		})
+	}
+
+	fmt.Printf("[CreateTopic DEBUG] Parsed: Name='%s', Partitions=%d\n", req.Name, req.Partitions)
 
 	// Validate
 	if req.Name == "" {
 		return c.Status(400).JSON(fiber.Map{
 			"success": false,
 			"error":   "Topic name is required",
+			"debug":   fmt.Sprintf("Body was: %s, Parsed name: '%s'", bodyStr, req.Name),
 		})
 	}
 

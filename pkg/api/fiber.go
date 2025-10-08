@@ -231,9 +231,9 @@ func (s *FiberServer) setupRoutes() {
 	v1.Post("/messages/publish", s.handlePublishFiber)
 	v1.Post("/messages/fetch", s.handleFetchFiber)
 
-	// Topic endpoints
-	v1.Get("/topics", s.handleTopicsFiber)
-	v1.All("/topics/*", s.handleTopicOperationsFiber)
+	// Legacy topic endpoints - REMOVED, using Native API instead
+	// v1.Get("/topics", s.handleTopicsFiber)
+	// v1.All("/topics/*", s.handleTopicOperationsFiber)
 
 	// Connection endpoints
 	v1.Get("/connections", s.handleConnectionsFiber)
