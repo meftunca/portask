@@ -1,9 +1,12 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiBase } from '@/lib/api'
-import { Archive, GitBranch, MessageSquare, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Archive, Edit, GitBranch, MessageSquare, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 interface Topic {
@@ -23,6 +26,21 @@ export default function TopicsNative() {
   const [topics, setTopics] = useState<Topic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Modal states
+  const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  
+  // Form state for create/edit
+  const [formData, setFormData] = useState({
+    name: '',
+    partitions: 1,
+    replication_factor: 1,
+    retention_ms: 604800000, // 7 days default
+    compression_type: 'snappy'
+  })
 
   const fetchTopics = async () => {
     setLoading(true)
@@ -79,7 +97,7 @@ export default function TopicsNative() {
             <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
             Refresh
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={() => setShowCreateModal(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Create Topic
           </Button>
@@ -173,7 +191,14 @@ export default function TopicsNative() {
               </TableHeader>
               <TableBody>
                 {topics.map((topic) => (
-                  <TableRow key={topic.name}>
+                  <TableRow 
+                    key={topic.name}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      setSelectedTopic(topic)
+                      setShowDetailModal(true)
+                    }}
+                  >
                     <TableCell className="font-medium">{topic.name}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{topic.partitions}</Badge>
@@ -186,11 +211,25 @@ export default function TopicsNative() {
                     </TableCell>
                     <TableCell>{new Date(topic.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="outline" size="sm">
-                          View
+                      <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTopic(topic)
+                            setShowDetailModal(true)
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTopic(topic)
+                            setShowDeleteModal(true)
+                          }}
+                        >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
                       </div>
@@ -202,6 +241,163 @@ export default function TopicsNative() {
           )}
         </CardContent>
       </Card>
+
+      {/* Detail Modal */}
+      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Topic Details</DialogTitle>
+            <DialogDescription>
+              View and manage topic configuration
+            </DialogDescription>
+          </DialogHeader>
+          {selectedTopic && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Topic Name</Label>
+                  <p className="font-semibold">{selectedTopic.name}</p>
+                </div>
+                <div>
+                  <Label>Partitions</Label>
+                  <p className="font-semibold">{selectedTopic.partitions}</p>
+                </div>
+                <div>
+                  <Label>Replication Factor</Label>
+                  <p className="font-semibold">{selectedTopic.replication_factor}</p>
+                </div>
+                <div>
+                  <Label>Message Count</Label>
+                  <p className="font-semibold">{selectedTopic.message_count.toLocaleString()}</p>
+                </div>
+                <div>
+                  <Label>Total Size</Label>
+                  <p className="font-semibold">{formatBytes(selectedTopic.total_bytes)}</p>
+                </div>
+                <div>
+                  <Label>Retention</Label>
+                  <p className="font-semibold">{formatRetention(selectedTopic.config.retention_ms)}</p>
+                </div>
+                <div>
+                  <Label>Compression</Label>
+                  <Badge variant="secondary">{selectedTopic.config.compression_type}</Badge>
+                </div>
+                <div>
+                  <Label>Created At</Label>
+                  <p className="font-semibold">{new Date(selectedTopic.created_at).toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDetailModal(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Topic Modal */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Topic</DialogTitle>
+            <DialogDescription>
+              Configure your new topic
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="name">Topic Name</Label>
+              <Input
+                id="name"
+                placeholder="my-topic"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="partitions">Partitions</Label>
+                <Input
+                  id="partitions"
+                  type="number"
+                  min="1"
+                  value={formData.partitions}
+                  onChange={(e) => setFormData({ ...formData, partitions: parseInt(e.target.value) })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="replication">Replication Factor</Label>
+                <Input
+                  id="replication"
+                  type="number"
+                  min="1"
+                  value={formData.replication_factor}
+                  onChange={(e) => setFormData({ ...formData, replication_factor: parseInt(e.target.value) })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={async () => {
+              try {
+                await apiBase.post('/api/v1/topics', formData)
+                setShowCreateModal(false)
+                fetchTopics()
+              } catch (err) {
+                console.error('Failed to create topic:', err)
+              }
+            }}>
+              Create Topic
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Topic</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this topic? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedTopic && (
+            <div className="py-4">
+              <p className="font-semibold">Topic: {selectedTopic.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {selectedTopic.message_count} messages will be permanently deleted
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={async () => {
+                if (selectedTopic) {
+                  try {
+                    await apiBase.delete(`/api/v1/topics/${selectedTopic.name}`)
+                    setShowDeleteModal(false)
+                    fetchTopics()
+                  } catch (err) {
+                    console.error('Failed to delete topic:', err)
+                  }
+                }
+              }}
+            >
+              Delete Topic
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

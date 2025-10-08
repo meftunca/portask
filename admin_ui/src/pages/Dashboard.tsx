@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useMetricsWebSocket } from '@/hooks/useWebSocket'
+import { useMetricsSSE } from '@/hooks/useSSE'
 import { apiBase } from '@/lib/api'
 import { Activity, Database, MessageSquare, Network, Server, Users, Wifi, WifiOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -32,16 +32,16 @@ export default function Dashboard() {
   const [throughputData, setThroughputData] = useState<Array<{ time: string, messages: number, latency: number }>>([])
   const [memoryData, setMemoryData] = useState<Array<{ time: string, alloc: number, sys: number }>>([])
 
-  // WebSocket for real-time updates
-  const { data: wsData, isConnected: wsConnected } = useMetricsWebSocket()
+  // SSE for real-time updates
+  const { data: sseData, isConnected: sseConnected } = useMetricsSSE()
 
-  // Update metrics from WebSocket if available
+  // Update metrics from SSE if available
   useEffect(() => {
-    if (wsData && wsConnected) {
-      console.log('[Dashboard] WebSocket data received:', wsData)
+    if (sseData && sseConnected) {
+      console.log('[Dashboard] SSE data received:', sseData)
 
-      // Process WebSocket metrics update
-      const data = wsData
+      // Process SSE metrics update
+      const data = sseData
       const newMetrics = {
         uptime: data.core?.uptime_seconds ? `${Math.round(data.core.uptime_seconds)}s` : '0s',
         connections: data.network?.connections_active || 0,
@@ -77,17 +77,17 @@ export default function Dashboard() {
         return newData.slice(-20)
       })
     }
-  }, [wsData, wsConnected])
+  }, [sseData, sseConnected])
 
-  // Fallback to HTTP polling if WebSocket is not connected
+  // Fallback to HTTP polling if SSE is not connected
   useEffect(() => {
-    // Only use polling if WebSocket is not connected
-    if (wsConnected) {
-      console.log('[Dashboard] Using WebSocket, skipping HTTP polling')
+    // Only use polling if SSE is not connected
+    if (sseConnected) {
+      console.log('[Dashboard] Using SSE, skipping HTTP polling')
       return
     }
 
-    console.log('[Dashboard] WebSocket not available, using HTTP polling')
+    console.log('[Dashboard] SSE not available, using HTTP polling')
 
     const fetchMetrics = async () => {
       try {
@@ -138,7 +138,7 @@ export default function Dashboard() {
     fetchMetrics()
     const interval = setInterval(fetchMetrics, 5000)
     return () => clearInterval(interval)
-  }, [wsConnected])
+  }, [sseConnected])
 
   const cards = [
     {
@@ -209,12 +209,12 @@ export default function Dashboard() {
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <h2 className="text-3xl font-bold tracking-tight">System Stats</h2>
         <div className="flex items-center space-x-2">
-          {wsConnected ? (
+          {sseConnected ? (
             <div className="flex items-center space-x-2 px-3 py-1 rounded-md bg-green-500/10 border border-green-500/20">
               <Wifi className="h-4 w-4 text-green-600" />
-              <span className="text-xs font-medium text-green-600">Real-time</span>
+              <span className="text-xs font-medium text-green-600">Live (SSE)</span>
             </div>
           ) : (
             <div className="flex items-center space-x-2 px-3 py-1 rounded-md bg-orange-500/10 border border-orange-500/20">
