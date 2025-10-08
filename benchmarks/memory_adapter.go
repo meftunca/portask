@@ -33,6 +33,8 @@ func (m *InMemoryKafkaAdapter) ProduceMessage(topic string, partition int32, key
 		Payload:   value,
 		Timestamp: time.Now().UnixNano(),
 		TTL:       int64(time.Hour),
+		Headers:   make(types.MessageHeaders), // Initialize Headers
+		Metadata:  make(map[string]string),    // Initialize Metadata
 	}
 
 	if err := m.store.Store(m.ctx, msg); err != nil {

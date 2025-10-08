@@ -37,6 +37,14 @@ func (t *AMQPTranslator) TranslatePublish(
 	// Get message from pool
 	msg := memory.GetMessage()
 	
+	// Ensure maps are initialized (pool might return partially reset message)
+	if msg.Metadata == nil {
+		msg.Metadata = make(map[string]string, 8)
+	}
+	if msg.Headers == nil {
+		msg.Headers = make(types.MessageHeaders, 4)
+	}
+	
 	// Use routing key as topic
 	topic := routingKey
 	if exchange != "" {

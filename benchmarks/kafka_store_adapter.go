@@ -30,6 +30,8 @@ func (d *DragonflyKafkaStoreAdapter) ProduceMessage(topic string, partition int3
 		Payload:   value,
 		Timestamp: time.Now().UnixNano(),
 		TTL:       int64(time.Hour),
+		Headers:   make(types.MessageHeaders), // Initialize Headers
+		Metadata:  make(map[string]string),    // Initialize Metadata
 	}
 
 	if err := d.store.Store(d.ctx, msg); err != nil {

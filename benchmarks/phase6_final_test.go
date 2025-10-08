@@ -45,10 +45,10 @@ func TestPhase6Final(t *testing.T) {
 		t.Logf("🚀 Phase 6: Final Optimized Configuration")
 		t.Logf("   Testing with %d messages...", messageCount)
 		t.Logf("")
-		
+
 		kafkaStore := NewDragonflyKafkaStore(ctx, dragonflyStore)
 		storageAdapter := &kafka.KafkaStorageAdapter{Storage: kafkaStore}
-		
+
 		// Use high throughput config (already optimal)
 		config := processor.HighThroughputConfig()
 		t.Logf("Configuration:")
@@ -57,27 +57,27 @@ func TestPhase6Final(t *testing.T) {
 		t.Logf("  Flush Interval: %v", config.FlushInterval)
 		t.Logf("  Max Retries:   %d", config.MaxRetries)
 		t.Logf("")
-		
+
 		asyncWriter := processor.NewAsyncBatchWriter(storageAdapter, config)
 		asyncWriter.Start(ctx)
-		
+
 		start := time.Now()
 		for i := 0; i < messageCount; i++ {
 			msg, _ := translator.TranslateProduce(fmt.Sprintf("topic-%d", i%50), 0, nil, payload)
 			asyncWriter.Write(msg)
 			memory.PutMessage(msg)
 		}
-		
+
 		// Allow time for async confirmations
 		time.Sleep(500 * time.Millisecond)
 		asyncWriter.Stop()
-		
+
 		duration := time.Since(start)
 		throughput := float64(messageCount) / duration.Seconds()
 		dataRate := float64(messageCount*1024) / duration.Seconds() / 1024 / 1024
-		
+
 		metrics := asyncWriter.GetMetrics()
-		
+
 		t.Logf("✅ Results:")
 		t.Logf("  Messages:      %d", messageCount)
 		t.Logf("  Duration:      %v", duration)
@@ -91,17 +91,17 @@ func TestPhase6Final(t *testing.T) {
 		t.Logf("  Avg Batch:     %.0f msgs", float64(messageCount)/float64(metrics.TotalBatchesWritten.Load()))
 		t.Logf("  Failed:        %d", metrics.FailedBatches.Load())
 		t.Logf("")
-		
+
 		// Compare with baseline
 		baseline := 163000.0
 		improvement := (throughput - baseline) / baseline * 100
-		
+
 		t.Logf("📈 Progress vs Baseline:")
 		t.Logf("  Baseline:      163K msgs/sec")
 		t.Logf("  Current:       %.0f msgs/sec", throughput)
 		t.Logf("  Improvement:   +%.1f%%", improvement)
 		t.Logf("")
-		
+
 		// Goal tracking
 		if throughput > 500000 {
 			t.Logf("  🎉 TARGET ACHIEVED! > 500K msgs/sec!")
@@ -112,11 +112,11 @@ func TestPhase6Final(t *testing.T) {
 		} else if throughput > 200000 {
 			t.Logf("  ✅ Phase 6 target achieved! > 200K msgs/sec!")
 		}
-		
+
 		// Calculate theoretical max based on in-memory test
 		theoreticalMax := 3020000.0
 		efficiency := throughput / theoreticalMax * 100
-		
+
 		t.Logf("")
 		t.Logf("🔬 Efficiency Analysis:")
 		t.Logf("  Theoretical Max: %.2fM msgs/sec (in-memory)", theoreticalMax/1000000)
@@ -188,4 +188,3 @@ func TestPhase6Final(t *testing.T) {
 		t.Logf("")
 	})
 }
-

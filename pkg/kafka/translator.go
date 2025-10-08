@@ -37,6 +37,14 @@ func (t *KafkaTranslator) TranslateProduce(
 	// Get message from pool
 	msg := memory.GetMessage()
 	
+	// Ensure maps are initialized (pool might return partially reset message)
+	if msg.Metadata == nil {
+		msg.Metadata = make(map[string]string, 8)
+	}
+	if msg.Headers == nil {
+		msg.Headers = make(types.MessageHeaders, 4)
+	}
+	
 	// Generate ID without allocation (no fmt.Sprintf!)
 	msgID := common.NextKafkaID()
 	msg.ID = types.MessageID(strconv.FormatUint(msgID, 10))
