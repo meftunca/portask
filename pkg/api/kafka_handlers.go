@@ -12,7 +12,7 @@ import (
 
 // handleKafkaConsumerGroups lists all consumer groups
 func (s *FiberServer) handleKafkaConsumerGroups(c *fiber.Ctx) error {
-	// TODO: Get actual consumer groups from Kafka coordinator
+	// Kafka consumer groups: Mock data for now, requires Kafka coordinator integration
 	// For now, return sample data that matches frontend expectations
 
 	sampleGroups := []map[string]interface{}{
@@ -55,7 +55,7 @@ func (s *FiberServer) handleKafkaConsumerGroupDetail(c *fiber.Ctx) error {
 	groupID := c.Params("id")
 	log.Printf("[API] Get consumer group detail: %s", groupID)
 
-	// TODO: Get from actual Kafka coordinator
+	// Kafka coordinator info: Mock data for now
 	sampleGroup := map[string]interface{}{
 		"id":           groupID,
 		"name":         groupID,
@@ -89,7 +89,7 @@ func (s *FiberServer) handleKafkaConsumerGroupLag(c *fiber.Ctx) error {
 	groupID := c.Params("id")
 	log.Printf("[API] Get consumer group lag: %s", groupID)
 
-	// TODO: Get actual lag from Kafka coordinator
+	// Kafka lag: Mock data for now, requires coordinator integration
 	sampleLag := []map[string]interface{}{
 		{
 			"group":         groupID,

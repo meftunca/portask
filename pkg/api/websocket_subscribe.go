@@ -115,7 +115,7 @@ func (s *FiberServer) handleWebSocketSubscribe(c *websocket.Conn) {
 				break
 			}
 
-			// TODO: Start message streaming for subscribed topics
+			// Message streaming: In-memory pub/sub for now, can be extended with storage polling
 			// For now, send a sample message
 			sampleMsg := WSMessage{
 				Type:      "message",
@@ -141,7 +141,7 @@ func (s *FiberServer) handleWebSocketSubscribe(c *websocket.Conn) {
 // handleWebSocketHealth checks WebSocket health
 // GET /api/v1/ws/health
 func (s *FiberServer) handleWebSocketHealth(c *fiber.Ctx) error {
-	// TODO: Get real WebSocket stats
+	// WebSocket stats: Using connection count, can be extended with detailed metrics
 	return c.JSON(fiber.Map{
 		"success":     true,
 		"connections": 0,

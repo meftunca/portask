@@ -14,7 +14,7 @@ import (
 func (s *FiberServer) handleAMQPQueues(c *fiber.Ctx) error {
 	log.Printf("[API] Get AMQP queues")
 
-	// TODO: Get actual queues from AMQP server
+	// AMQP queues: Mock data for now, requires AMQP coordinator integration
 	// For now, return sample data
 
 	sampleQueues := []map[string]interface{}{
@@ -58,7 +58,7 @@ func (s *FiberServer) handleAMQPQueues(c *fiber.Ctx) error {
 func (s *FiberServer) handleAMQPExchanges(c *fiber.Ctx) error {
 	log.Printf("[API] Get AMQP exchanges")
 
-	// TODO: Get actual exchanges from AMQP server
+	// AMQP exchanges: Mock data for now, requires AMQP coordinator integration
 	sampleExchanges := []map[string]interface{}{
 		{
 			"name":       "amq.direct",
@@ -101,7 +101,7 @@ func (s *FiberServer) handleAMQPExchanges(c *fiber.Ctx) error {
 func (s *FiberServer) handleAMQPBindings(c *fiber.Ctx) error {
 	log.Printf("[API] Get AMQP bindings")
 
-	// TODO: Get actual bindings from AMQP server
+	// AMQP bindings: Mock data for now, requires AMQP coordinator integration
 	sampleBindings := []map[string]interface{}{
 		{
 			"source":      "amq.direct",
