@@ -6,6 +6,7 @@ import Layout from '@/components/layout/Layout'
 import Dashboard from '@/pages/Dashboard'
 import Messages from '@/pages/Messages'
 import Topics from '@/pages/Topics'
+import ConsumerGroups from '@/pages/ConsumerGroups'
 import Connections from '@/pages/Connections'
 import Monitoring from '@/pages/Monitoring'
 import Settings from '@/pages/Settings'
@@ -31,6 +32,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/topics" element={<Topics />} />
+              <Route path="/consumer-groups" element={<ConsumerGroups />} />
               <Route path="/connections" element={<Connections />} />
               <Route path="/monitoring" element={<Monitoring />} />
               <Route path="/settings" element={<Settings />} />

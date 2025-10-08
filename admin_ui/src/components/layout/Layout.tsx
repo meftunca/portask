@@ -10,7 +10,8 @@ import {
   Network, 
   Settings,
   Menu,
-  X
+  X,
+  Users
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Messages', href: '/messages', icon: MessageSquare },
   { name: 'Topics', href: '/topics', icon: Database },
+  { name: 'Consumer Groups', href: '/consumer-groups', icon: Users },
   { name: 'Connections', href: '/connections', icon: Network },
   { name: 'Monitoring', href: '/monitoring', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
