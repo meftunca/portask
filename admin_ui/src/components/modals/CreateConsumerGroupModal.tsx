@@ -1,11 +1,11 @@
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { apiBase } from '@/lib/api'
-import { useState } from 'react'
 import { X } from 'lucide-react'
+import { useState } from 'react'
 
 interface CreateConsumerGroupModalProps {
   open: boolean
@@ -45,7 +45,7 @@ export function CreateConsumerGroupModal({ open, onOpenChange, onSuccess }: Crea
   const handleSubmit = async () => {
     setLoading(true)
     setError(null)
-    
+
     try {
       // Create consumer group
       await apiBase.post('/api/v1/consumer-groups', {
@@ -63,7 +63,7 @@ export function CreateConsumerGroupModal({ open, onOpenChange, onSuccess }: Crea
 
       onSuccess()
       onOpenChange(false)
-      
+
       // Reset form
       setFormData({
         group_id: '',
@@ -166,8 +166,8 @@ export function CreateConsumerGroupModal({ open, onOpenChange, onSuccess }: Crea
                 }}
                 disabled={loading}
               />
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 variant="outline"
                 onClick={handleAddTopic}
                 disabled={loading || !topicInput.trim()}
@@ -180,8 +180,8 @@ export function CreateConsumerGroupModal({ open, onOpenChange, onSuccess }: Crea
                 {formData.topics.map((topic) => (
                   <Badge key={topic} variant="secondary" className="gap-1">
                     {topic}
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
+                    <X
+                      className="h-3 w-3 cursor-pointer"
                       onClick={() => handleRemoveTopic(topic)}
                     />
                   </Badge>

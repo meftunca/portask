@@ -1,11 +1,11 @@
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { apiBase } from '@/lib/api'
-import { useState } from 'react'
 import { X } from 'lucide-react'
+import { useState } from 'react'
 
 interface BeginTransactionModalProps {
   open: boolean
@@ -43,7 +43,7 @@ export function BeginTransactionModal({ open, onOpenChange, onSuccess }: BeginTr
   const handleSubmit = async () => {
     setLoading(true)
     setError(null)
-    
+
     try {
       await apiBase.post('/api/v1/transactions/begin', {
         transaction_id: formData.transaction_id,
@@ -53,7 +53,7 @@ export function BeginTransactionModal({ open, onOpenChange, onSuccess }: BeginTr
 
       onSuccess()
       onOpenChange(false)
-      
+
       // Reset form
       setFormData({
         transaction_id: '',
@@ -114,8 +114,8 @@ export function BeginTransactionModal({ open, onOpenChange, onSuccess }: BeginTr
                 }}
                 disabled={loading}
               />
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 variant="outline"
                 onClick={handleAddTopic}
                 disabled={loading || !topicInput.trim()}
@@ -128,8 +128,8 @@ export function BeginTransactionModal({ open, onOpenChange, onSuccess }: BeginTr
                 {formData.topics.map((topic) => (
                   <Badge key={topic} variant="secondary" className="gap-1">
                     {topic}
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
+                    <X
+                      className="h-3 w-3 cursor-pointer"
                       onClick={() => handleRemoveTopic(topic)}
                     />
                   </Badge>

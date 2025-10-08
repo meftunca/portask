@@ -338,6 +338,34 @@ export default function TopicsNative() {
                 />
               </div>
             </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="compression">Compression Type</Label>
+                <select
+                  id="compression"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  value={formData.compression_type}
+                  onChange={(e) => setFormData({ ...formData, compression_type: e.target.value })}
+                >
+                  <option value="none">None</option>
+                  <option value="gzip">GZip</option>
+                  <option value="snappy">Snappy</option>
+                  <option value="lz4">LZ4</option>
+                  <option value="zstd">Zstandard</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="retention">Retention (days)</Label>
+                <Input
+                  id="retention"
+                  type="number"
+                  min="1"
+                  value={formData.retention_ms / (1000 * 60 * 60 * 24)}
+                  onChange={(e) => setFormData({ ...formData, retention_ms: parseInt(e.target.value) * 1000 * 60 * 60 * 24 })}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateModal(false)}>
@@ -345,11 +373,32 @@ export default function TopicsNative() {
             </Button>
             <Button onClick={async () => {
               try {
-                await apiBase.post('/api/v1/topics', formData)
+                // Format payload correctly for backend
+                const payload = {
+                  name: formData.name,
+                  partitions: formData.partitions,
+                  replication_factor: formData.replication_factor,
+                  config: {
+                    retention_ms: formData.retention_ms,
+                    compression_type: formData.compression_type,
+                    max_message_bytes: 1048576, // 1MB default
+                    min_insync_replicas: 1
+                  }
+                }
+                await apiBase.post('/api/v1/topics', payload)
                 setShowCreateModal(false)
                 fetchTopics()
-              } catch (err) {
+                // Reset form
+                setFormData({
+                  name: '',
+                  partitions: 1,
+                  replication_factor: 1,
+                  retention_ms: 604800000,
+                  compression_type: 'snappy'
+                })
+              } catch (err: any) {
                 console.error('Failed to create topic:', err)
+                alert(err.response?.data?.error || 'Failed to create topic')
               }
             }}>
               Create Topic
