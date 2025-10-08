@@ -1,33 +1,32 @@
-import React, { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { 
-  LineChart, 
-  Line, 
-  AreaChart, 
-  Area, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts'
-import { 
-  Activity, 
-  AlertTriangle, 
-  Clock, 
-  Cpu, 
-  Database, 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { api } from '@/lib/api'
+import {
+  Activity,
+  AlertTriangle,
+  Cpu,
+  Database,
   MemoryStick,
   RefreshCw
 } from 'lucide-react'
-import { api, apiBase } from '@/lib/api'
+import React, { useEffect, useState } from 'react'
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts'
 
 interface SystemMetrics {
   timestamp: string
@@ -60,7 +59,7 @@ const Monitoring: React.FC = () => {
       try {
         const res = await api.get('/metrics');
         const data = res.data;
-        
+
         // Backend'den gelen metrics data yapısını UI formatına çevir
         const currentTime = new Date().toISOString();
         const formattedMetrics: SystemMetrics[] = [{
@@ -75,7 +74,7 @@ const Monitoring: React.FC = () => {
 
         // Alert'leri de backend data'sından oluştur
         const formattedAlerts: AlertMetric[] = [];
-        
+
         // Yüksek memory kullanımı kontrolü
         if (data.system?.alloc_mb > 1000) {
           formattedAlerts.push({
@@ -112,14 +111,14 @@ const Monitoring: React.FC = () => {
 
   useEffect(() => {
     let interval: NodeJS.Timeout
-    
+
     if (realTimeMode) {
       interval = setInterval(() => {
         setMetrics(prev => {
           const newData = [...prev.slice(1)]
           const lastMetric = prev[prev.length - 1]
           const now = new Date()
-          
+
           newData.push({
             timestamp: now.toLocaleTimeString(),
             cpu: Math.max(0, Math.min(100, lastMetric.cpu + (Math.random() - 0.5) * 20)),
@@ -129,12 +128,12 @@ const Monitoring: React.FC = () => {
             activeConnections: Math.max(0, lastMetric.activeConnections + Math.floor((Math.random() - 0.5) * 4)),
             queueSize: Math.max(0, lastMetric.queueSize + Math.floor((Math.random() - 0.5) * 1000))
           })
-          
+
           return newData
         })
       }, 2000)
     }
-    
+
     return () => {
       if (interval) clearInterval(interval)
     }
@@ -184,7 +183,7 @@ const Monitoring: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button 
+          <Button
             variant={realTimeMode ? "default" : "outline"}
             onClick={() => setRealTimeMode(!realTimeMode)}
           >
@@ -210,7 +209,7 @@ const Monitoring: React.FC = () => {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Memory Usage</CardTitle>
@@ -225,7 +224,7 @@ const Monitoring: React.FC = () => {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Messages/sec</CardTitle>
@@ -240,7 +239,7 @@ const Monitoring: React.FC = () => {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Queue Size</CardTitle>
@@ -270,17 +269,17 @@ const Monitoring: React.FC = () => {
                 <XAxis dataKey="timestamp" />
                 <YAxis />
                 <Tooltip />
-                <Line 
-                  type="monotone" 
-                  dataKey="cpu" 
-                  stroke="#3b82f6" 
+                <Line
+                  type="monotone"
+                  dataKey="cpu"
+                  stroke="#3b82f6"
                   strokeWidth={2}
                   name="CPU (%)"
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="memory" 
-                  stroke="#10b981" 
+                <Line
+                  type="monotone"
+                  dataKey="memory"
+                  stroke="#10b981"
                   strokeWidth={2}
                   name="Memory (%)"
                 />
@@ -300,11 +299,11 @@ const Monitoring: React.FC = () => {
                 <XAxis dataKey="timestamp" />
                 <YAxis />
                 <Tooltip />
-                <Area 
-                  type="monotone" 
-                  dataKey="messagesPerSecond" 
-                  stroke="#8b5cf6" 
-                  fill="#8b5cf6" 
+                <Area
+                  type="monotone"
+                  dataKey="messagesPerSecond"
+                  stroke="#8b5cf6"
+                  fill="#8b5cf6"
                   fillOpacity={0.3}
                   name="Messages/sec"
                 />
@@ -324,9 +323,9 @@ const Monitoring: React.FC = () => {
                 <XAxis dataKey="timestamp" />
                 <YAxis />
                 <Tooltip />
-                <Bar 
-                  dataKey="activeConnections" 
-                  fill="#f59e0b" 
+                <Bar
+                  dataKey="activeConnections"
+                  fill="#f59e0b"
                   name="Connections"
                 />
               </BarChart>
@@ -372,7 +371,7 @@ const Monitoring: React.FC = () => {
         <CardContent>
           <div className="space-y-4">
             {alerts.map((alert) => (
-              <div 
+              <div
                 key={alert.id}
                 className="flex items-center space-x-4 p-4 border rounded-lg"
               >

@@ -99,8 +99,6 @@ const defaultSettings: SettingsData = {
 
 const Settings: React.FC = () => {
   const queryClient = useQueryClient()
-  // Local state fallback (ilk yükleme için)
-  const [localSettings, setLocalSettings] = useState<SettingsData>(defaultSettings)
   const [saving, setSaving] = useState(false)
 
   // Ayarları backend'den çek

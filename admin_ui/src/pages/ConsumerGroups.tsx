@@ -1,7 +1,13 @@
-import { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -11,22 +17,16 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { 
-  Users, 
-  Activity, 
-  AlertCircle, 
-  CheckCircle, 
+  Activity,
+  AlertCircle,
+  CheckCircle,
+  Clock,
   RefreshCw,
   TrendingUp,
-  Clock
+  Users
 } from 'lucide-react'
-import { apiBase } from '@/lib/api'
+import { useEffect, useState } from 'react'
+// import { apiBase } from '@/lib/api' // TODO: Use for real API calls
 
 interface ConsumerGroup {
   id: string
@@ -95,9 +95,9 @@ export default function ConsumerGroups() {
           ]
         }
       ]
-      
+
       setGroups(sampleGroups)
-      
+
       if (sampleGroups.length > 0 && !selectedGroup) {
         setSelectedGroup(sampleGroups[0].name)
       }
@@ -116,7 +116,7 @@ export default function ConsumerGroups() {
       // GET /api/v1/kafka/consumer-groups/{groupName}
       const group = groups.find(g => g.name === groupName)
       setGroupDetails(group || null)
-      
+
       // Fetch lag info
       if (group) {
         const sampleLag: GroupLag[] = [
@@ -416,11 +416,11 @@ export default function ConsumerGroups() {
                 <TableBody>
                   {groupLag.map((lag, idx) => {
                     const lagStatus = lag.lag === 0 ? 'current' : lag.lag < 10 ? 'minor' : 'major'
-                    const statusColor = 
+                    const statusColor =
                       lagStatus === 'current' ? 'text-green-600' :
-                      lagStatus === 'minor' ? 'text-yellow-600' :
-                      'text-red-600'
-                    
+                        lagStatus === 'minor' ? 'text-yellow-600' :
+                          'text-red-600'
+
                     return (
                       <TableRow key={idx}>
                         <TableCell className="font-medium">{lag.topic}</TableCell>
@@ -435,12 +435,12 @@ export default function ConsumerGroups() {
                           {lag.lag}
                         </TableCell>
                         <TableCell>
-                          <Badge 
-                            variant="outline" 
+                          <Badge
+                            variant="outline"
                             className={
                               lagStatus === 'current' ? 'border-green-500/20 bg-green-500/10 text-green-600' :
-                              lagStatus === 'minor' ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-600' :
-                              'border-red-500/20 bg-red-500/10 text-red-600'
+                                lagStatus === 'minor' ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-600' :
+                                  'border-red-500/20 bg-red-500/10 text-red-600'
                             }
                           >
                             {lagStatus === 'current' ? 'Up to date' : lagStatus === 'minor' ? 'Minor lag' : 'Behind'}

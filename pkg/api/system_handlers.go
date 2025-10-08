@@ -141,4 +141,3 @@ func (s *FiberServer) handleSystemStorage(c *fiber.Ctx) error {
 		"storage": storageInfo,
 	})
 }
-

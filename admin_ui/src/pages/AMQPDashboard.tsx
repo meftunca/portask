@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { apiBase } from '@/lib/api'
 import {
   Activity,
   ArrowRight,
@@ -13,8 +13,8 @@ import {
   Users,
   Zap
 } from 'lucide-react'
-import { apiBase } from '@/lib/api'
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts'
+import { useEffect, useState } from 'react'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 interface AMQPMetrics {
   queues: number
@@ -53,7 +53,7 @@ export default function AMQPDashboard() {
 
   const [queues, setQueues] = useState<QueueInfo[]>([])
   const [loading, setLoading] = useState(false)
-  const [publishHistory, setPublishHistory] = useState<Array<{time: string, published: number, delivered: number}>>([])
+  const [publishHistory, setPublishHistory] = useState<Array<{ time: string, published: number, delivered: number }>>([])
 
   const fetchMetrics = async () => {
     setLoading(true)
@@ -227,33 +227,33 @@ export default function AMQPDashboard() {
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={publishHistory}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="time" 
+                <XAxis
+                  dataKey="time"
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                 />
-                <YAxis 
+                <YAxis
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))' 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))'
                   }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="published" 
-                  stroke="#8884d8" 
+                <Line
+                  type="monotone"
+                  dataKey="published"
+                  stroke="#8884d8"
                   strokeWidth={2}
                   dot={false}
                   name="Published"
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="delivered" 
-                  stroke="#82ca9d" 
+                <Line
+                  type="monotone"
+                  dataKey="delivered"
+                  stroke="#82ca9d"
                   strokeWidth={2}
                   dot={false}
                   name="Delivered"
@@ -306,7 +306,7 @@ export default function AMQPDashboard() {
                   <div>
                     <p className="text-xs text-muted-foreground">Success Rate</p>
                     <p className="text-2xl font-bold">
-                      {metrics.messagesPublished > 0 
+                      {metrics.messagesPublished > 0
                         ? ((metrics.messagesAcked / metrics.messagesPublished) * 100).toFixed(1)
                         : 0}%
                     </p>
@@ -330,14 +330,13 @@ export default function AMQPDashboard() {
           {queues.length > 0 ? (
             <div className="space-y-3">
               {queues.map((queue) => (
-                <div 
+                <div
                   key={queue.name}
                   className="flex items-center justify-between p-4 border rounded-lg"
                 >
                   <div className="flex items-center space-x-4">
-                    <Activity className={`h-5 w-5 ${
-                      queue.state === 'running' ? 'text-green-600' : 'text-gray-400'
-                    }`} />
+                    <Activity className={`h-5 w-5 ${queue.state === 'running' ? 'text-green-600' : 'text-gray-400'
+                      }`} />
                     <div>
                       <div className="flex items-center space-x-2">
                         <p className="font-medium">{queue.name}</p>

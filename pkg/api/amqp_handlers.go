@@ -19,31 +19,31 @@ func (s *FiberServer) handleAMQPQueues(c *fiber.Ctx) error {
 
 	sampleQueues := []map[string]interface{}{
 		{
-			"name":      "orders",
-			"messages":  150,
-			"consumers": 2,
-			"state":     "running",
-			"durable":   true,
+			"name":       "orders",
+			"messages":   150,
+			"consumers":  2,
+			"state":      "running",
+			"durable":    true,
 			"autoDelete": false,
-			"exclusive": false,
+			"exclusive":  false,
 		},
 		{
-			"name":      "notifications",
-			"messages":  45,
-			"consumers": 1,
-			"state":     "running",
-			"durable":   true,
+			"name":       "notifications",
+			"messages":   45,
+			"consumers":  1,
+			"state":      "running",
+			"durable":    true,
 			"autoDelete": false,
-			"exclusive": false,
+			"exclusive":  false,
 		},
 		{
-			"name":      "logs",
-			"messages":  0,
-			"consumers": 0,
-			"state":     "idle",
-			"durable":   false,
+			"name":       "logs",
+			"messages":   0,
+			"consumers":  0,
+			"state":      "idle",
+			"durable":    false,
 			"autoDelete": true,
-			"exclusive": false,
+			"exclusive":  false,
 		},
 	}
 
@@ -123,4 +123,3 @@ func (s *FiberServer) handleAMQPBindings(c *fiber.Ctx) error {
 		"count":    len(sampleBindings),
 	})
 }
-

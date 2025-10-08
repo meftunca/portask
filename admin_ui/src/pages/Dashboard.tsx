@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Activity, Database, MessageSquare, Network, Server, Users, Wifi, WifiOff } from 'lucide-react'
-import { api, apiBase } from '@/lib/api'
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMetricsWebSocket } from '@/hooks/useWebSocket'
+import { apiBase } from '@/lib/api'
+import { Activity, Database, MessageSquare, Network, Server, Users, Wifi, WifiOff } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 interface SystemMetrics {
   uptime: string
@@ -29,9 +29,9 @@ export default function Dashboard() {
   })
 
   const [isConnected, setIsConnected] = useState(false)
-  const [throughputData, setThroughputData] = useState<Array<{time: string, messages: number, latency: number}>>([])
-  const [memoryData, setMemoryData] = useState<Array<{time: string, alloc: number, sys: number}>>([])
-  
+  const [throughputData, setThroughputData] = useState<Array<{ time: string, messages: number, latency: number }>>([])
+  const [memoryData, setMemoryData] = useState<Array<{ time: string, alloc: number, sys: number }>>([])
+
   // WebSocket for real-time updates
   const { data: wsData, isConnected: wsConnected } = useMetricsWebSocket()
 
@@ -39,7 +39,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (wsData && wsConnected) {
       console.log('[Dashboard] WebSocket data received:', wsData)
-      
+
       // Process WebSocket metrics update
       const data = wsData
       const newMetrics = {
@@ -58,7 +58,7 @@ export default function Dashboard() {
 
       // Update chart data
       const now = new Date().toLocaleTimeString()
-      
+
       setThroughputData(prev => {
         const newData = [...prev, {
           time: now,
@@ -88,12 +88,12 @@ export default function Dashboard() {
     }
 
     console.log('[Dashboard] WebSocket not available, using HTTP polling')
-    
+
     const fetchMetrics = async () => {
       try {
         const response = await apiBase.get('/metrics',)
         const data = response.data
-        
+
         const newMetrics = {
           uptime: data.core?.uptime_seconds ? `${Math.round(data.core.uptime_seconds)}s` : '0s',
           connections: data.network?.connections_active || 0,
@@ -110,7 +110,7 @@ export default function Dashboard() {
 
         // Update chart data
         const now = new Date().toLocaleTimeString()
-        
+
         setThroughputData(prev => {
           const newData = [...prev, {
             time: now,
@@ -128,13 +128,13 @@ export default function Dashboard() {
           }]
           return newData.slice(-20)
         })
-        
+
       } catch (error) {
         setIsConnected(false)
         setMetrics((m) => ({ ...m, status: 'disconnected' }))
       }
     }
-    
+
     fetchMetrics()
     const interval = setInterval(fetchMetrics, 5000)
     return () => clearInterval(interval)
@@ -270,31 +270,31 @@ export default function Dashboard() {
                 <AreaChart data={throughputData}>
                   <defs>
                     <linearGradient id="colorMessages" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis 
-                    dataKey="time" 
+                  <XAxis
+                    dataKey="time"
                     className="text-xs"
                     tick={{ fill: 'currentColor' }}
                   />
-                  <YAxis 
+                  <YAxis
                     className="text-xs"
                     tick={{ fill: 'currentColor' }}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))' 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))'
                     }}
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="messages" 
-                    stroke="#8884d8" 
-                    fillOpacity={1} 
+                  <Area
+                    type="monotone"
+                    dataKey="messages"
+                    stroke="#8884d8"
+                    fillOpacity={1}
                     fill="url(#colorMessages)"
                     name="Total Messages"
                   />
@@ -352,34 +352,34 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={memoryData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="time" 
+                <XAxis
+                  dataKey="time"
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                 />
-                <YAxis 
+                <YAxis
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                   label={{ value: 'MB', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))' 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))'
                   }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="alloc" 
-                  stroke="#8884d8" 
+                <Line
+                  type="monotone"
+                  dataKey="alloc"
+                  stroke="#8884d8"
                   strokeWidth={2}
                   name="Allocated"
                   dot={false}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="sys" 
-                  stroke="#82ca9d" 
+                <Line
+                  type="monotone"
+                  dataKey="sys"
+                  stroke="#82ca9d"
                   strokeWidth={2}
                   name="System"
                   dot={false}
@@ -401,32 +401,32 @@ export default function Dashboard() {
               <AreaChart data={throughputData}>
                 <defs>
                   <linearGradient id="colorLatency" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="time" 
+                <XAxis
+                  dataKey="time"
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                 />
-                <YAxis 
+                <YAxis
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                   label={{ value: 'ms', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))' 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))'
                   }}
                 />
-                <Area 
-                  type="monotone" 
-                  dataKey="latency" 
-                  stroke="#fbbf24" 
-                  fillOpacity={1} 
+                <Area
+                  type="monotone"
+                  dataKey="latency"
+                  stroke="#fbbf24"
+                  fillOpacity={1}
                   fill="url(#colorLatency)"
                   name="Latency (ms)"
                 />

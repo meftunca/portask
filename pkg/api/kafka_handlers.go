@@ -92,28 +92,28 @@ func (s *FiberServer) handleKafkaConsumerGroupLag(c *fiber.Ctx) error {
 	// TODO: Get actual lag from Kafka coordinator
 	sampleLag := []map[string]interface{}{
 		{
-			"group":          groupID,
-			"topic":          "orders",
-			"partition":      0,
-			"currentOffset":  1500,
-			"logEndOffset":   1502,
-			"lag":            2,
+			"group":         groupID,
+			"topic":         "orders",
+			"partition":     0,
+			"currentOffset": 1500,
+			"logEndOffset":  1502,
+			"lag":           2,
 		},
 		{
-			"group":          groupID,
-			"topic":          "orders",
-			"partition":      1,
-			"currentOffset":  3200,
-			"logEndOffset":   3200,
-			"lag":            0,
+			"group":         groupID,
+			"topic":         "orders",
+			"partition":     1,
+			"currentOffset": 3200,
+			"logEndOffset":  3200,
+			"lag":           0,
 		},
 		{
-			"group":          groupID,
-			"topic":          "payments",
-			"partition":      0,
-			"currentOffset":  890,
-			"logEndOffset":   895,
-			"lag":            5,
+			"group":         groupID,
+			"topic":         "payments",
+			"partition":     0,
+			"currentOffset": 890,
+			"logEndOffset":  895,
+			"lag":           5,
 		},
 	}
 
@@ -123,4 +123,3 @@ func (s *FiberServer) handleKafkaConsumerGroupLag(c *fiber.Ctx) error {
 		"count":   len(sampleLag),
 	})
 }
-

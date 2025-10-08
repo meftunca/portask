@@ -18,6 +18,8 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/compress v1.18.0
+	github.com/linxGnu/grocksdb v1.10.2
+	github.com/marcboeker/go-duckdb v1.8.5
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rabbitmq/amqp091-go v1.10.0
@@ -26,7 +28,6 @@ require (
 	github.com/spf13/viper v1.20.1
 	github.com/streadway/amqp v1.1.0
 	github.com/stretchr/testify v1.10.0
-	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 )
 
@@ -44,9 +45,6 @@ require (
 	github.com/eapache/go-resiliency v1.7.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
-	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
-	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
-	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/fasthttp/websocket v1.5.8 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -63,8 +61,6 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
-	github.com/linxGnu/grocksdb v1.10.2 // indirect
-	github.com/marcboeker/go-duckdb v1.8.5 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect

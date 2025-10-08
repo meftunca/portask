@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { apiBase } from '@/lib/api'
 import {
   Activity,
-  AlertCircle,
   BarChart3,
   CheckCircle,
   Database,
@@ -15,8 +14,8 @@ import {
   Users,
   Zap
 } from 'lucide-react'
-import { apiBase } from '@/lib/api'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts'
+import { useEffect, useState } from 'react'
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 interface KafkaMetrics {
   brokers: number
@@ -53,7 +52,7 @@ export default function KafkaDashboard() {
 
   const [topicMetrics, setTopicMetrics] = useState<TopicMetrics[]>([])
   const [loading, setLoading] = useState(false)
-  const [throughputHistory, setThroughputHistory] = useState<Array<{time: string, rate: number}>>([])
+  const [throughputHistory, setThroughputHistory] = useState<Array<{ time: string, rate: number }>>([])
 
   const fetchMetrics = async () => {
     setLoading(true)
@@ -61,7 +60,7 @@ export default function KafkaDashboard() {
       // Fetch topics
       const topicsRes = await apiBase.get('/api/v1/topics')
       const topics = topicsRes.data?.topics || []
-      
+
       // Fetch general metrics
       const metricsRes = await apiBase.get('/metrics')
       const data = metricsRes.data
@@ -210,25 +209,25 @@ export default function KafkaDashboard() {
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={throughputHistory}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="time" 
+                <XAxis
+                  dataKey="time"
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                 />
-                <YAxis 
+                <YAxis
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))' 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))'
                   }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="rate" 
-                  stroke="#8884d8" 
+                <Line
+                  type="monotone"
+                  dataKey="rate"
+                  stroke="#8884d8"
                   strokeWidth={2}
                   dot={false}
                   name="Msgs/sec"
@@ -293,20 +292,20 @@ export default function KafkaDashboard() {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={topicMetrics.slice(0, 10)}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="name" 
+                <XAxis
+                  dataKey="name"
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                 />
-                <YAxis 
+                <YAxis
                   className="text-xs"
                   tick={{ fill: 'currentColor' }}
                   label={{ value: 'Partitions', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))' 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))'
                   }}
                 />
                 <Bar dataKey="partitions" fill="#8884d8" name="Partitions" />
