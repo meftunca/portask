@@ -1,8 +1,8 @@
-import type { ClientOptions, HealthStatus, APIResponse } from './types';
-import { Producer } from './producer';
-import { Consumer } from './consumer';
-import { ConsumerGroupClient } from './consumer-group';
-import { TransactionClient } from './transaction';
+import { Consumer } from "./consumer";
+import { ConsumerGroupClient } from "./consumer-group";
+import { Producer } from "./producer";
+import { TransactionClient } from "./transaction";
+import type { ClientOptions, HealthStatus } from "./types";
 
 export class PortaskClient {
   private baseURL: string;
@@ -16,7 +16,7 @@ export class PortaskClient {
   private _transaction?: TransactionClient;
 
   constructor(options: ClientOptions) {
-    this.baseURL = options.baseURL.replace(/\/$/, ''); // Remove trailing slash
+    this.baseURL = options.baseURL.replace(/\/$/, ""); // Remove trailing slash
     this.apiKey = options.apiKey;
     this.timeout = options.timeout || 30000;
     this.headers = options.headers || {};
@@ -55,26 +55,26 @@ export class PortaskClient {
   // ==================== Health Check ====================
 
   async health(): Promise<HealthStatus> {
-    const response = await this.get<HealthStatus>('/health');
+    const response = await this.get<HealthStatus>("/health");
     return response;
   }
 
   // ==================== HTTP Methods ====================
 
   async get<T = any>(path: string): Promise<T> {
-    return this.request<T>('GET', path);
+    return this.request<T>("GET", path);
   }
 
   async post<T = any>(path: string, body?: any): Promise<T> {
-    return this.request<T>('POST', path, body);
+    return this.request<T>("POST", path, body);
   }
 
   async put<T = any>(path: string, body?: any): Promise<T> {
-    return this.request<T>('PUT', path, body);
+    return this.request<T>("PUT", path, body);
   }
 
   async delete<T = any>(path: string): Promise<T> {
-    return this.request<T>('DELETE', path);
+    return this.request<T>("DELETE", path);
   }
 
   private async request<T>(
@@ -85,13 +85,13 @@ export class PortaskClient {
     const url = `${this.baseURL}${path}`;
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
       ...this.headers,
     };
 
     if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
+      headers["Authorization"] = `Bearer ${this.apiKey}`;
     }
 
     const controller = new AbortController();
@@ -113,8 +113,8 @@ export class PortaskClient {
       }
 
       // Handle empty responses
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
         return {} as T;
       }
 
@@ -127,7 +127,7 @@ export class PortaskClient {
 
       return data as T;
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (error.name === "AbortError") {
         throw new Error(`Request timeout after ${this.timeout}ms`);
       }
       throw error;
@@ -139,4 +139,3 @@ export class PortaskClient {
 export function createClient(options: ClientOptions): PortaskClient {
   return new PortaskClient(options);
 }
-

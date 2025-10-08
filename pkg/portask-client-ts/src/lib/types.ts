@@ -239,4 +239,3 @@ export interface SuccessResponse<T = any> {
 }
 
 export type APIResponse<T = any> = SuccessResponse<T> | ErrorResponse;
-

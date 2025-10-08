@@ -1,5 +1,9 @@
-import type { PortaskClient } from './client';
-import type { ConsumeOptions, FetchedMessage, BatchFetchResponse } from './types';
+import type { PortaskClient } from "./client";
+import type {
+  BatchFetchResponse,
+  ConsumeOptions,
+  FetchedMessage,
+} from "./types";
 
 export class Consumer {
   constructor(private client: PortaskClient) {}
@@ -25,7 +29,7 @@ export class Consumer {
     };
 
     const response = await this.client.post<BatchFetchResponse>(
-      '/api/v1/messages/batch/fetch',
+      "/api/v1/messages/batch/fetch",
       request
     );
 
@@ -61,7 +65,7 @@ export class Consumer {
     };
 
     const response = await this.client.post<BatchFetchResponse>(
-      '/api/v1/messages/batch/fetch/poll',
+      "/api/v1/messages/batch/fetch/poll",
       request
     );
 
@@ -80,7 +84,7 @@ export class Consumer {
    * Acknowledge a message
    */
   async acknowledge(messageId: string, groupId?: string): Promise<void> {
-    await this.client.post('/api/v1/messages/batch/ack', {
+    await this.client.post("/api/v1/messages/batch/ack", {
       message_ids: [messageId],
       group_id: groupId,
     });
@@ -89,8 +93,11 @@ export class Consumer {
   /**
    * Acknowledge multiple messages
    */
-  async acknowledgeBatch(messageIds: string[], groupId?: string): Promise<void> {
-    await this.client.post('/api/v1/messages/batch/ack', {
+  async acknowledgeBatch(
+    messageIds: string[],
+    groupId?: string
+  ): Promise<void> {
+    await this.client.post("/api/v1/messages/batch/ack", {
       message_ids: messageIds,
       group_id: groupId,
     });
@@ -105,7 +112,7 @@ export class Consumer {
     requeue: boolean = false,
     groupId?: string
   ): Promise<void> {
-    await this.client.post('/api/v1/messages/batch/nack', {
+    await this.client.post("/api/v1/messages/batch/nack", {
       message_ids: [messageId],
       reason,
       requeue,
@@ -122,7 +129,7 @@ export class Consumer {
     requeue: boolean = false,
     groupId?: string
   ): Promise<void> {
-    await this.client.post('/api/v1/messages/batch/nack', {
+    await this.client.post("/api/v1/messages/batch/nack", {
       message_ids: messageIds,
       reason,
       requeue,
@@ -130,4 +137,3 @@ export class Consumer {
     });
   }
 }
-

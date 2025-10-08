@@ -1,56 +1,49 @@
 // Main client
-export { PortaskClient, createClient } from './lib/client';
+export { PortaskClient, createClient } from "./lib/client";
 
 // Components
-export { Producer } from './lib/producer';
-export { Consumer } from './lib/consumer';
-export { ConsumerGroupClient } from './lib/consumer-group';
-export { TransactionClient } from './lib/transaction';
+export { Consumer } from "./lib/consumer";
+export { ConsumerGroupClient } from "./lib/consumer-group";
+export { Producer } from "./lib/producer";
+export { TransactionClient } from "./lib/transaction";
 
 // Types
 export type {
-  // Client
-  ClientOptions,
-  HealthStatus,
-  
-  // Messages
-  Message,
-  ProduceResult,
-  FetchedMessage,
-  ConsumeOptions,
-  
+  // Responses
+  APIResponse,
+  BatchFetchRequest,
+  BatchFetchResponse,
   // Batch Operations
   BatchPublishRequest,
   BatchPublishResponse,
-  BatchFetchRequest,
-  BatchFetchResponse,
-  TopicFetchRequest,
-  PartitionFetchRequest,
-  TopicFetchResponse,
-  PartitionFetchResponse,
-  
+  // Client
+  ClientOptions,
+  ConsumeOptions,
   // Consumer Groups
   ConsumerGroup,
-  GroupMember,
-  PartitionAssignment,
-  JoinGroupResponse,
+  ErrorResponse,
+  FetchedMessage,
   GroupLag,
-  PartitionLag,
+  GroupMember,
+  HealthStatus,
+  JoinGroupResponse,
+  // Messages
+  Message,
   OffsetCommit,
   OffsetInfo,
-  
-  // Transactions
-  Transaction,
-  TransactionStatus,
-  
+  PartitionAssignment,
+  PartitionFetchRequest,
+  PartitionFetchResponse,
+  PartitionLag,
+  ProduceResult,
+  SuccessResponse,
   // Topics
   Topic,
   TopicConfig,
+  TopicFetchRequest,
+  TopicFetchResponse,
   TopicStats,
-  
-  // Responses
-  APIResponse,
-  SuccessResponse,
-  ErrorResponse,
-} from './lib/types';
-
+  // Transactions
+  Transaction,
+  TransactionStatus,
+} from "./lib/types";

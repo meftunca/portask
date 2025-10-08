@@ -1,12 +1,12 @@
-import type { PortaskClient } from './client';
+import type { PortaskClient } from "./client";
 import type {
   ConsumerGroup,
-  JoinGroupResponse,
   GroupLag,
   GroupMember,
+  JoinGroupResponse,
   OffsetCommit,
   OffsetInfo,
-} from './types';
+} from "./types";
 
 export class ConsumerGroupClient {
   constructor(private client: PortaskClient) {}
@@ -15,10 +15,10 @@ export class ConsumerGroupClient {
    * Create a new consumer group
    */
   async create(name: string, topics: string[]): Promise<ConsumerGroup> {
-    const response = await this.client.post<{ success: boolean; group: ConsumerGroup }>(
-      '/api/v1/consumer-groups',
-      { name, topics }
-    );
+    const response = await this.client.post<{
+      success: boolean;
+      group: ConsumerGroup;
+    }>("/api/v1/consumer-groups", { name, topics });
     return response.group;
   }
 
@@ -26,9 +26,10 @@ export class ConsumerGroupClient {
    * List all consumer groups
    */
   async list(): Promise<ConsumerGroup[]> {
-    const response = await this.client.get<{ success: boolean; groups: ConsumerGroup[] }>(
-      '/api/v1/consumer-groups'
-    );
+    const response = await this.client.get<{
+      success: boolean;
+      groups: ConsumerGroup[];
+    }>("/api/v1/consumer-groups");
     return response.groups;
   }
 
@@ -36,9 +37,10 @@ export class ConsumerGroupClient {
    * Get details of a consumer group
    */
   async get(groupId: string): Promise<ConsumerGroup> {
-    const response = await this.client.get<{ success: boolean; group: ConsumerGroup }>(
-      `/api/v1/consumer-groups/${groupId}`
-    );
+    const response = await this.client.get<{
+      success: boolean;
+      group: ConsumerGroup;
+    }>(`/api/v1/consumer-groups/${groupId}`);
     return response.group;
   }
 
@@ -60,10 +62,10 @@ export class ConsumerGroupClient {
    * Join a consumer group
    */
   async join(groupId: string, clientId: string): Promise<JoinGroupResponse> {
-    const response = await this.client.post<{ success: boolean; response: JoinGroupResponse }>(
-      `/api/v1/consumer-groups/${groupId}/join`,
-      { client_id: clientId }
-    );
+    const response = await this.client.post<{
+      success: boolean;
+      response: JoinGroupResponse;
+    }>(`/api/v1/consumer-groups/${groupId}/join`, { client_id: clientId });
     return response.response;
   }
 
@@ -79,7 +81,11 @@ export class ConsumerGroupClient {
   /**
    * Send heartbeat to consumer group
    */
-  async heartbeat(groupId: string, memberId: string, generation: number): Promise<void> {
+  async heartbeat(
+    groupId: string,
+    memberId: string,
+    generation: number
+  ): Promise<void> {
     await this.client.post(`/api/v1/consumer-groups/${groupId}/heartbeat`, {
       member_id: memberId,
       generation,
@@ -90,15 +96,20 @@ export class ConsumerGroupClient {
    * Commit offsets for a consumer group
    */
   async commitOffsets(groupId: string, offsets: OffsetCommit[]): Promise<void> {
-    await this.client.post(`/api/v1/consumer-groups/${groupId}/offsets/commit`, {
-      offsets,
-    });
+    await this.client.post(
+      `/api/v1/consumer-groups/${groupId}/offsets/commit`,
+      {
+        offsets,
+      }
+    );
   }
 
   /**
    * Fetch committed offsets for a consumer group
    */
-  async fetchOffsets(groupId: string): Promise<Record<string, Record<number, OffsetInfo>>> {
+  async fetchOffsets(
+    groupId: string
+  ): Promise<Record<string, Record<number, OffsetInfo>>> {
     const response = await this.client.get<{
       success: boolean;
       offsets: Record<string, Record<number, OffsetInfo>>;
@@ -112,7 +123,7 @@ export class ConsumerGroupClient {
   async resetOffsets(
     groupId: string,
     topics: string[],
-    position: 'earliest' | 'latest'
+    position: "earliest" | "latest"
   ): Promise<void> {
     await this.client.post(`/api/v1/consumer-groups/${groupId}/offsets/reset`, {
       topics,
@@ -134,9 +145,10 @@ export class ConsumerGroupClient {
    * List active members of a consumer group
    */
   async listMembers(groupId: string): Promise<GroupMember[]> {
-    const response = await this.client.get<{ success: boolean; members: GroupMember[] }>(
-      `/api/v1/consumer-groups/${groupId}/members`
-    );
+    const response = await this.client.get<{
+      success: boolean;
+      members: GroupMember[];
+    }>(`/api/v1/consumer-groups/${groupId}/members`);
     return response.members;
   }
 
@@ -144,10 +156,10 @@ export class ConsumerGroupClient {
    * Get the state of a consumer group
    */
   async getState(groupId: string): Promise<Record<string, any>> {
-    const response = await this.client.get<{ success: boolean; state: Record<string, any> }>(
-      `/api/v1/consumer-groups/${groupId}/state`
-    );
+    const response = await this.client.get<{
+      success: boolean;
+      state: Record<string, any>;
+    }>(`/api/v1/consumer-groups/${groupId}/state`);
     return response.state;
   }
 }
-

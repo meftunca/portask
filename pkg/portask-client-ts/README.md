@@ -34,10 +34,10 @@ bun add @portask/client
 ### Create Client
 
 ```typescript
-import { createClient } from '@portask/client';
+import { createClient } from "@portask/client";
 
 const client = createClient({
-  baseURL: 'http://localhost:8080',
+  baseURL: "http://localhost:8080",
 });
 
 // Check health
@@ -50,15 +50,15 @@ console.log(`Connected to Portask ${health.version}`);
 ```typescript
 // Single message
 const result = await client.producer().publish({
-  topic: 'orders',
-  key: 'order-123',
+  topic: "orders",
+  key: "order-123",
   value: {
     order_id: 123,
-    customer: 'John Doe',
+    customer: "John Doe",
     total: 99.99,
   },
   headers: {
-    source: 'web-app',
+    source: "web-app",
   },
 });
 
@@ -70,9 +70,9 @@ console.log(`Published: ${result.message_id} (offset: ${result.offset})`);
 ```typescript
 // Batch publish
 const messages = [
-  { topic: 'orders', value: { order_id: 1 } },
-  { topic: 'orders', value: { order_id: 2 } },
-  { topic: 'orders', value: { order_id: 3 } },
+  { topic: "orders", value: { order_id: 1 } },
+  { topic: "orders", value: { order_id: 2 } },
+  { topic: "orders", value: { order_id: 3 } },
 ];
 
 const results = await client.producer().publishBatch(messages);
@@ -84,14 +84,14 @@ console.log(`Published ${results.length} messages`);
 ```typescript
 // Fetch messages
 const messages = await client.consumer().fetch({
-  topic: 'orders',
+  topic: "orders",
   maxMessages: 100,
   maxWaitMs: 5000,
 });
 
 for (const msg of messages) {
   console.log(`Received: ${msg.message_id}`, msg.value);
-  
+
   // Acknowledge message
   await client.consumer().acknowledge(msg.message_id);
 }
@@ -101,21 +101,25 @@ for (const msg of messages) {
 
 ```typescript
 // Create consumer group
-const group = await client.consumerGroup().create('order-processors', ['orders']);
+const group = await client
+  .consumerGroup()
+  .create("order-processors", ["orders"]);
 console.log(`Created group: ${group.id}`);
 
 // Join group
-const joinResp = await client.consumerGroup().join('order-processors', 'client-1');
+const joinResp = await client
+  .consumerGroup()
+  .join("order-processors", "client-1");
 console.log(`Joined as member: ${joinResp.member_id}`);
 
 // Commit offsets
-await client.consumerGroup().commitOffsets('order-processors', [
-  { topic: 'orders', partition: 0, offset: 100 },
-  { topic: 'orders', partition: 1, offset: 150 },
+await client.consumerGroup().commitOffsets("order-processors", [
+  { topic: "orders", partition: 0, offset: 100 },
+  { topic: "orders", partition: 1, offset: 150 },
 ]);
 
 // Get lag
-const lag = await client.consumerGroup().getLag('order-processors');
+const lag = await client.consumerGroup().getLag("order-processors");
 console.log(`Total lag: ${lag.total_lag}`);
 ```
 
@@ -123,14 +127,17 @@ console.log(`Total lag: ${lag.total_lag}`);
 
 ```typescript
 // Begin transaction
-const txn = await client.transaction().begin(60000, ['orders', 'inventory']);
+const txn = await client.transaction().begin(60000, ["orders", "inventory"]);
 console.log(`Transaction started: ${txn.id}`);
 
 // Publish messages in transaction
-await client.producer().publishBatch([
-  { topic: 'orders', value: { order_id: 1 } },
-  { topic: 'inventory', value: { product_id: 100, qty: -1 } },
-], txn.id);
+await client.producer().publishBatch(
+  [
+    { topic: "orders", value: { order_id: 1 } },
+    { topic: "inventory", value: { product_id: 100, qty: -1 } },
+  ],
+  txn.id
+);
 
 // Commit transaction
 await client.transaction().commit(txn.id);
@@ -143,8 +150,8 @@ console.log(`Transaction committed: ${txn.id}`);
 
 ```typescript
 const client = createClient({
-  baseURL: 'http://localhost:8080',
-  apiKey: 'your-api-key',
+  baseURL: "http://localhost:8080",
+  apiKey: "your-api-key",
 });
 ```
 
@@ -152,7 +159,7 @@ const client = createClient({
 
 ```typescript
 const client = createClient({
-  baseURL: 'http://localhost:8080',
+  baseURL: "http://localhost:8080",
   timeout: 60000, // 60 seconds
 });
 ```
@@ -161,9 +168,9 @@ const client = createClient({
 
 ```typescript
 const client = createClient({
-  baseURL: 'http://localhost:8080',
+  baseURL: "http://localhost:8080",
   headers: {
-    'X-Custom-Header': 'value',
+    "X-Custom-Header": "value",
   },
 });
 ```
@@ -171,9 +178,9 @@ const client = createClient({
 ### Async Publishing (Fire-and-Forget)
 
 ```typescript
-await client.producer().publishAsync([
-  { topic: 'logs', value: { level: 'info', msg: 'Hello' } },
-]);
+await client
+  .producer()
+  .publishAsync([{ topic: "logs", value: { level: "info", msg: "Hello" } }]);
 ```
 
 ### Long-Polling Consumer
@@ -181,7 +188,7 @@ await client.producer().publishAsync([
 ```typescript
 // Blocks until messages available or timeout
 const messages = await client.consumer().fetchPoll({
-  topic: 'orders',
+  topic: "orders",
   maxMessages: 10,
   maxWaitMs: 30000, // Wait up to 30 seconds
 });
@@ -190,7 +197,7 @@ const messages = await client.consumer().fetchPoll({
 ### Batch Acknowledgment
 
 ```typescript
-const messageIds = messages.map(m => m.message_id);
+const messageIds = messages.map((m) => m.message_id);
 await client.consumer().acknowledgeBatch(messageIds);
 ```
 
@@ -199,9 +206,9 @@ await client.consumer().acknowledgeBatch(messageIds);
 ```typescript
 await client.consumer().negativeAcknowledge(
   messageId,
-  'Processing failed',
+  "Processing failed",
   true, // requeue
-  'order-processors' // group ID
+  "order-processors" // group ID
 );
 ```
 
@@ -264,7 +271,7 @@ Unlike Kafka or RabbitMQ client libraries, Portask provides:
 ✅ **Protocol-Agnostic**: Same API works for Kafka, AMQP, or native clients  
 ✅ **Modern API**: RESTful HTTP/JSON + WebSocket  
 ✅ **Simple & Fast**: No complex protocols, no heavyweight dependencies  
-✅ **Built-in Features**: Transactions, batching, consumer groups, lag monitoring  
+✅ **Built-in Features**: Transactions, batching, consumer groups, lag monitoring
 
 ## 📚 Examples
 
@@ -303,4 +310,3 @@ Contributions are welcome! Please open an issue or submit a PR.
 
 - GitHub Issues: https://github.com/meftunca/portask/issues
 - Documentation: https://github.com/meftunca/portask/tree/main/docs
-

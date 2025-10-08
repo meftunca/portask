@@ -1,5 +1,5 @@
-import type { PortaskClient } from './client';
-import type { Transaction, TransactionStatus } from './types';
+import type { PortaskClient } from "./client";
+import type { Transaction, TransactionStatus } from "./types";
 
 export class TransactionClient {
   constructor(private client: PortaskClient) {}
@@ -21,7 +21,7 @@ export class TransactionClient {
       transaction_id: string;
       state: string;
       expires_at: string;
-    }>('/api/v1/transactions/begin', request);
+    }>("/api/v1/transactions/begin", request);
 
     return {
       id: response.transaction_id,
@@ -39,7 +39,7 @@ export class TransactionClient {
    * Commit a transaction
    */
   async commit(transactionId: string): Promise<void> {
-    await this.client.post('/api/v1/transactions/commit', {
+    await this.client.post("/api/v1/transactions/commit", {
       transaction_id: transactionId,
     });
   }
@@ -48,7 +48,7 @@ export class TransactionClient {
    * Abort a transaction
    */
   async abort(transactionId: string, reason?: string): Promise<void> {
-    await this.client.post('/api/v1/transactions/abort', {
+    await this.client.post("/api/v1/transactions/abort", {
       transaction_id: transactionId,
       reason,
     });
@@ -58,16 +58,19 @@ export class TransactionClient {
    * Get transaction status
    */
   async getStatus(transactionId: string): Promise<TransactionStatus> {
-    return this.client.get<TransactionStatus>(`/api/v1/transactions/${transactionId}`);
+    return this.client.get<TransactionStatus>(
+      `/api/v1/transactions/${transactionId}`
+    );
   }
 
   /**
    * List all active transactions
    */
   async list(): Promise<Transaction[]> {
-    const response = await this.client.get<{ success: boolean; transactions: Transaction[] }>(
-      '/api/v1/transactions'
-    );
+    const response = await this.client.get<{
+      success: boolean;
+      transactions: Transaction[];
+    }>("/api/v1/transactions");
     return response.transactions;
   }
 
@@ -78,4 +81,3 @@ export class TransactionClient {
     await this.client.delete(`/api/v1/transactions/${transactionId}`);
   }
 }
-

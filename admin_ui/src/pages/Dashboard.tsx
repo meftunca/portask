@@ -1,8 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { useMetricsWebSocket } from '@/hooks/useWebSocket'
 import { apiBase } from '@/lib/api'
-import { Activity, Database, MessageSquare, Network, Server, Users, Wifi, WifiOff } from 'lucide-react'
+import { Activity, Database, MessageSquare, Network, Server, Users, Wifi, WifiOff, GitBranch, Blocks, Archive } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
@@ -18,6 +19,13 @@ interface SystemMetrics {
   messages_rate?: number
 }
 
+interface NativeStats {
+  topics_count: number
+  consumer_groups_count: number
+  transactions_active: number
+  messages_per_sec: number
+}
+
 export default function Dashboard() {
   const [metrics, setMetrics] = useState<SystemMetrics>({
     uptime: '0s',
@@ -26,6 +34,13 @@ export default function Dashboard() {
     memory_usage: '0 MB',
     cpu_usage: '0%',
     status: 'connecting'
+  })
+
+  const [nativeStats, setNativeStats] = useState<NativeStats>({
+    topics_count: 0,
+    consumer_groups_count: 0,
+    transactions_active: 0,
+    messages_per_sec: 0
   })
 
   const [isConnected, setIsConnected] = useState(false)
