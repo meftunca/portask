@@ -243,10 +243,23 @@ func (s *FiberServer) handleBatchPublish(c *fiber.Ctx) error {
 
 	// Write batch to storage
 	if len(batch) > 0 {
-		// TODO: Use processor to write batch
-		// For now, simulate success
+		ctx := c.Context()
+		messageBatch := &types.MessageBatch{
+			Messages:  batch,
+			BatchID:   fmt.Sprintf("batch-%d", time.Now().UnixNano()),
+			CreatedAt: time.Now().Unix(),
+		}
+		
+		if err := s.storage.StoreBatch(ctx, messageBatch); err != nil {
+			log.Printf("[Native API] Failed to store batch: %v", err)
+			return c.Status(500).JSON(fiber.Map{
+				"success": false,
+				"error":   fmt.Sprintf("Failed to store batch: %v", err),
+			})
+		}
+		
 		published = len(batch)
-		log.Printf("[Native API] Published batch: %d messages", published)
+		log.Printf("[Native API] Published batch to storage: %d messages", published)
 	}
 
 	duration := time.Since(startTime)
@@ -327,18 +340,43 @@ func (s *FiberServer) handleBatchFetch(c *fiber.Ctx) error {
 		partitionResponses := make([]PartitionFetchResponse, 0, len(topicReq.Partitions))
 
 		for _, partReq := range topicReq.Partitions {
-			// TODO: Fetch messages from storage
-			// For now, return placeholder
-			messages := []FetchedMessage{
-				{
-					MessageID: "msg-123",
-					Offset:    partReq.FetchOffset,
-					Key:       "key-1",
-					Value:     map[string]interface{}{"order_id": 123},
-					Headers:   map[string]interface{}{},
-					Timestamp: time.Now().Format(time.RFC3339),
-					Size:      100,
-				},
+			// Fetch messages from storage
+			ctx := c.Context()
+			limit := req.MaxMessages - totalMessages
+			if limit > 100 {
+				limit = 100 // Cap per partition
+			}
+			
+			storedMessages, err := s.storage.Fetch(ctx, types.TopicName(topicReq.Topic), partReq.Partition, partReq.FetchOffset, limit)
+			if err != nil {
+				log.Printf("[Native API] Failed to fetch from topic %s partition %d: %v", topicReq.Topic, partReq.Partition, err)
+				// Continue to next partition even if one fails
+				continue
+			}
+			
+			// Convert to API format
+			messages := make([]FetchedMessage, 0, len(storedMessages))
+			for _, msg := range storedMessages {
+				var value interface{}
+				if err := json.Unmarshal(msg.Payload, &value); err != nil {
+					value = string(msg.Payload) // Fallback to string
+				}
+				
+				// Convert Metadata map[string]string to map[string]interface{}
+				headers := make(map[string]interface{})
+				for k, v := range msg.Metadata {
+					headers[k] = v
+				}
+				
+				messages = append(messages, FetchedMessage{
+					MessageID: string(msg.ID),
+					Offset:    msg.Offset,
+					Key:       msg.Key,
+					Value:     value,
+					Headers:   headers,
+					Timestamp: time.Unix(0, msg.Timestamp).Format(time.RFC3339),
+					Size:      int64(len(msg.Payload)),
+				})
 			}
 
 			totalMessages += len(messages)
