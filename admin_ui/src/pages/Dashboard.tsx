@@ -1,9 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { useMetricsWebSocket } from '@/hooks/useWebSocket'
 import { apiBase } from '@/lib/api'
-import { Activity, Database, MessageSquare, Network, Server, Users, Wifi, WifiOff, GitBranch, Blocks, Archive } from 'lucide-react'
+import { Activity, Database, MessageSquare, Network, Server, Users, Wifi, WifiOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 

@@ -3,6 +3,12 @@ import { QueryClient, QueryClientProvider } from 'react-query'
 import { Toaster } from '@/components/ui/toaster'
 import { ThemeProvider } from '@/components/theme-provider'
 import Layout from '@/components/layout/Layout'
+// Portask Native Pages (v2.0)
+import PortaskDashboard from '@/pages/PortaskDashboard'
+import TopicsNative from '@/pages/TopicsNative'
+import ConsumerGroupsNative from '@/pages/ConsumerGroupsNative'
+import TransactionsNative from '@/pages/TransactionsNative'
+// Legacy/Protocol-specific pages
 import Dashboard from '@/pages/Dashboard'
 import Messages from '@/pages/Messages'
 import Topics from '@/pages/Topics'
@@ -30,11 +36,16 @@ function App() {
         <Router>
           <Layout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+              {/* Portask Native v2.0 Routes */}
+              <Route path="/" element={<PortaskDashboard />} />
+              <Route path="/dashboard" element={<PortaskDashboard />} />
+              <Route path="/topics" element={<TopicsNative />} />
+              <Route path="/consumer-groups" element={<ConsumerGroupsNative />} />
+              <Route path="/transactions" element={<TransactionsNative />} />
+              
+              {/* Legacy/Protocol-specific Routes */}
+              <Route path="/system" element={<Dashboard />} />
               <Route path="/messages" element={<Messages />} />
-              <Route path="/topics" element={<Topics />} />
-              <Route path="/consumer-groups" element={<ConsumerGroups />} />
               <Route path="/kafka" element={<KafkaDashboard />} />
               <Route path="/amqp" element={<AMQPDashboard />} />
               <Route path="/connections" element={<Connections />} />

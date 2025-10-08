@@ -13,7 +13,9 @@ import {
   X,
   Users,
   Zap,
-  Rabbit
+  Rabbit,
+  GitBranch,
+  Blocks
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -21,14 +23,18 @@ interface LayoutProps {
 }
 
 const navigation = [
+  // Portask Native v2.0 (Primary)
   { name: 'Dashboard', href: '/dashboard', icon: Home },
-  { name: 'Messages', href: '/messages', icon: MessageSquare },
-  { name: 'Topics', href: '/topics', icon: Database },
+  { name: 'Topics', href: '/topics', icon: GitBranch },
   { name: 'Consumer Groups', href: '/consumer-groups', icon: Users },
-  { name: 'Kafka', href: '/kafka', icon: Zap },
-  { name: 'AMQP / RabbitMQ', href: '/amqp', icon: Rabbit },
-  { name: 'Connections', href: '/connections', icon: Network },
+  { name: 'Transactions', href: '/transactions', icon: Blocks },
+  { name: 'Messages', href: '/messages', icon: MessageSquare },
   { name: 'Monitoring', href: '/monitoring', icon: BarChart3 },
+  // Protocol Stats (Secondary)
+  { name: 'Kafka Stats', href: '/kafka', icon: Zap },
+  { name: 'AMQP Stats', href: '/amqp', icon: Rabbit },
+  { name: 'System Stats', href: '/system', icon: Database },
+  // Admin
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

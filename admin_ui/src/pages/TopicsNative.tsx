@@ -1,0 +1,208 @@
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { apiBase } from '@/lib/api'
+import { Archive, GitBranch, MessageSquare, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+
+interface Topic {
+  name: string
+  partitions: number
+  replication_factor: number
+  message_count: number
+  total_bytes: number
+  created_at: string
+  config: {
+    retention_ms: number
+    compression_type: string
+  }
+}
+
+export default function TopicsNative() {
+  const [topics, setTopics] = useState<Topic[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchTopics = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await apiBase.get('/api/v1/topics')
+      
+      if (response.data?.success) {
+        setTopics(response.data.topics || [])
+      } else {
+        setError(response.data?.error || 'Failed to fetch topics')
+        setTopics([])
+      }
+    } catch (err: any) {
+      console.error('[TopicsNative] Error:', err)
+      setError(err.message || 'Failed to connect to API')
+      setTopics([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchTopics()
+    const interval = setInterval(fetchTopics, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  }
+
+  const formatRetention = (ms: number) => {
+    const hours = ms / (1000 * 60 * 60)
+    if (hours < 24) return `${hours}h`
+    const days = hours / 24
+    return `${Math.round(days)}d`
+  }
+
+  return (
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Topics</h2>
+          <p className="text-muted-foreground">
+            Unified topic management for all protocols
+          </p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm" onClick={fetchTopics} disabled={loading}>
+            <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
+            Refresh
+          </Button>
+          <Button size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Create Topic
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <strong className="font-bold">Error:</strong>
+          <span className="block sm:inline"> {error}</span>
+        </div>
+      )}
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Topics</CardTitle>
+            <GitBranch className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{topics.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">Active topics</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Messages</CardTitle>
+            <MessageSquare className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">
+              {topics.reduce((sum, t) => sum + t.message_count, 0).toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Across all topics</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Storage</CardTitle>
+            <Archive className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">
+              {formatBytes(topics.reduce((sum, t) => sum + t.total_bytes, 0))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Storage used</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Topics Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <GitBranch className="mr-2 h-5 w-5" /> Topics List
+          </CardTitle>
+          <CardDescription>
+            All topics managed by Portask Native API
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : topics.length === 0 ? (
+            <div className="text-center py-8">
+              <GitBranch className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
+              <p className="mt-4 text-muted-foreground">No topics found. Create your first topic to get started.</p>
+              <Button className="mt-4">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Topic
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Partitions</TableHead>
+                  <TableHead>Messages</TableHead>
+                  <TableHead>Size</TableHead>
+                  <TableHead>Retention</TableHead>
+                  <TableHead>Compression</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topics.map((topic) => (
+                  <TableRow key={topic.name}>
+                    <TableCell className="font-medium">{topic.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{topic.partitions}</Badge>
+                    </TableCell>
+                    <TableCell>{topic.message_count.toLocaleString()}</TableCell>
+                    <TableCell>{formatBytes(topic.total_bytes)}</TableCell>
+                    <TableCell>{formatRetention(topic.config.retention_ms)}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{topic.config.compression_type}</Badge>
+                    </TableCell>
+                    <TableCell>{new Date(topic.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" size="sm">
+                          View
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+

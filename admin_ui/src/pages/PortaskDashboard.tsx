@@ -1,22 +1,20 @@
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { apiBase } from '@/lib/api'
-import { 
-  Activity, 
-  Database, 
-  MessageSquare, 
-  Server, 
-  Users, 
-  GitBranch, 
-  Blocks, 
-  Archive,
+import {
+  Blocks,
   Clock,
-  TrendingUp
+  Database,
+  GitBranch,
+  MessageSquare,
+  Server,
+  TrendingUp,
+  Users
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Link } from 'react-router-dom'
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 interface PortaskMetrics {
   health: {
@@ -61,13 +59,13 @@ export default function PortaskDashboard() {
       try {
         // Fetch health
         const healthRes = await apiBase.get('/health')
-        
+
         // Fetch topics
         const topicsRes = await apiBase.get('/api/v1/topics')
-        
+
         // Fetch consumer groups
         const groupsRes = await apiBase.get('/api/v1/consumer-groups')
-        
+
         // Fetch transactions
         const transactionsRes = await apiBase.get('/api/v1/transactions')
 
