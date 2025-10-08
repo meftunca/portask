@@ -7,6 +7,7 @@ import (
 	"log"
 	"runtime"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -23,6 +24,29 @@ import (
 	"github.com/meftunca/portask/pkg/types"
 )
 
+// ConsumerGroup represents a Portask consumer group
+type ConsumerGroup struct {
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	State         string                 `json:"state"`
+	Protocol      string                 `json:"protocol"`
+	Members       []ConsumerGroupMember  `json:"members"`
+	Subscriptions []string               `json:"subscriptions"`
+	Offsets       map[string]int64       `json:"offsets"`
+	Metadata      map[string]interface{} `json:"metadata"`
+	CreatedAt     string                 `json:"created_at"`
+	UpdatedAt     string                 `json:"updated_at"`
+}
+
+// ConsumerGroupMember represents a member of a consumer group
+type ConsumerGroupMember struct {
+	ID         string   `json:"id"`
+	ClientID   string   `json:"client_id"`
+	Host       string   `json:"host"`
+	Topics     []string `json:"topics"`
+	AssignedAt string   `json:"assigned_at"`
+}
+
 // FiberServer provides REST API endpoints using Fiber v2
 type FiberServer struct {
 	app           *fiber.App
@@ -38,6 +62,14 @@ type FiberServer struct {
 	errorCount   int64
 	avgLatency   time.Duration
 	startTime    time.Time
+
+	// In-memory storage for Native API entities
+	topics            map[string]*Topic
+	topicsMutex       sync.RWMutex
+	consumerGroups    map[string]*ConsumerGroup
+	groupsMutex       sync.RWMutex
+	transactions      map[string]*Transaction
+	transactionsMutex sync.RWMutex
 }
 
 var fiberStartTime = time.Now()
@@ -128,12 +160,15 @@ func NewFiberServer(config FiberConfig, networkServer *network.TCPServer, storag
 	app := fiber.New(fiberConfig)
 
 	server := &FiberServer{
-		app:           app,
-		networkServer: networkServer,
-		storage:       storage,
-		wsServer:      wsServer,
-		jsonConfig:    config.JSONConfig,
-		startTime:     time.Now(),
+		app:            app,
+		networkServer:  networkServer,
+		storage:        storage,
+		wsServer:       wsServer,
+		jsonConfig:     config.JSONConfig,
+		startTime:      time.Now(),
+		topics:         make(map[string]*Topic),
+		consumerGroups: make(map[string]*ConsumerGroup),
+		transactions:   make(map[string]*Transaction),
 	}
 
 	// Setup middlewares
@@ -223,8 +258,8 @@ func (s *FiberServer) setupRoutes() {
 
 	// SSE (Server-Sent Events) endpoints - Better for one-way communication
 	sse := v1.Group("/sse")
-	sse.Get("/metrics", s.handleSSEMetrics)  // Real-time metrics stream
-	sse.Get("/health", s.handleSSEHealth)    // Real-time health stream
+	sse.Get("/metrics", s.handleSSEMetrics) // Real-time metrics stream
+	sse.Get("/health", s.handleSSEHealth)   // Real-time health stream
 
 	// Message endpoints
 	v1.Get("/messages", s.handleMessagesFiber)

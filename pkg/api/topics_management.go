@@ -14,10 +14,10 @@ import (
 
 // TopicConfig represents topic configuration
 type TopicConfig struct {
-	RetentionMs    int64  `json:"retention_ms"`     // Message retention in milliseconds
-	CompressionType string `json:"compression_type"` // "none", "gzip", "snappy", "lz4", "zstd"
-	MaxMessageBytes int64  `json:"max_message_bytes"` // Max message size
-	MinInSyncReplicas int  `json:"min_insync_replicas"` // Min replicas for ack
+	RetentionMs       int64  `json:"retention_ms"`        // Message retention in milliseconds
+	CompressionType   string `json:"compression_type"`    // "none", "gzip", "snappy", "lz4", "zstd"
+	MaxMessageBytes   int64  `json:"max_message_bytes"`   // Max message size
+	MinInSyncReplicas int    `json:"min_insync_replicas"` // Min replicas for ack
 }
 
 // Topic represents a unified topic
@@ -71,11 +71,11 @@ func (s *FiberServer) handleCreateTopic(c *fiber.Ctx) error {
 	// Parse request body
 	var req CreateTopicRequest
 	body := c.Body()
-	
+
 	// Return debug info temporarily
 	bodyStr := string(body)
 	fmt.Printf("[CreateTopic DEBUG] Raw body: %s\n", bodyStr)
-	
+
 	if len(body) == 0 {
 		return c.Status(400).JSON(fiber.Map{
 			"success": false,
@@ -121,8 +121,8 @@ func (s *FiberServer) handleCreateTopic(c *fiber.Ctx) error {
 		config = *req.Config
 	}
 
-	// TODO: Create topic in storage
-	topic := Topic{
+	// Create topic and store in memory
+	topic := &Topic{
 		Name:              req.Name,
 		Partitions:        req.Partitions,
 		ReplicationFactor: req.ReplicationFactor,
@@ -132,6 +132,11 @@ func (s *FiberServer) handleCreateTopic(c *fiber.Ctx) error {
 		MessageCount:      0,
 		TotalBytes:        0,
 	}
+
+	// Store topic in memory
+	s.topicsMutex.Lock()
+	s.topics[req.Name] = topic
+	s.topicsMutex.Unlock()
 
 	log.Printf("[Native API] Created topic: %s (partitions: %d, replication: %d)", req.Name, req.Partitions, req.ReplicationFactor)
 
@@ -144,24 +149,13 @@ func (s *FiberServer) handleCreateTopic(c *fiber.Ctx) error {
 // handleListTopics lists all topics
 // GET /api/v1/topics
 func (s *FiberServer) handleListTopics(c *fiber.Ctx) error {
-	// TODO: Get topics from storage
-	topics := []Topic{
-		{
-			Name:              "orders",
-			Partitions:        3,
-			ReplicationFactor: 1,
-			Config: TopicConfig{
-				RetentionMs:       86400000,
-				CompressionType:   "zstd",
-				MaxMessageBytes:   1048576,
-				MinInSyncReplicas: 1,
-			},
-			CreatedAt:    time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
-			UpdatedAt:    time.Now().Format(time.RFC3339),
-			MessageCount: 1000,
-			TotalBytes:   1024000,
-		},
+	// Get topics from in-memory storage
+	s.topicsMutex.RLock()
+	topics := make([]Topic, 0, len(s.topics))
+	for _, topic := range s.topics {
+		topics = append(topics, *topic)
 	}
+	s.topicsMutex.RUnlock()
 
 	log.Printf("[Native API] Listed topics: %d topics", len(topics))
 
@@ -184,24 +178,17 @@ func (s *FiberServer) handleGetTopic(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Get topic from storage
-	topic := Topic{
-		Name:              topicName,
-		Partitions:        3,
-		ReplicationFactor: 1,
-		Config: TopicConfig{
-			RetentionMs:       86400000,
-			CompressionType:   "zstd",
-			MaxMessageBytes:   1048576,
-			MinInSyncReplicas: 1,
-		},
-		CreatedAt:    time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
-		UpdatedAt:    time.Now().Format(time.RFC3339),
-		MessageCount: 1000,
-		TotalBytes:   1024000,
-	}
+	// Get topic from in-memory storage
+	s.topicsMutex.RLock()
+	topic, exists := s.topics[topicName]
+	s.topicsMutex.RUnlock()
 
-	log.Printf("[Native API] Got topic: %s", topicName)
+	if !exists {
+		return c.Status(404).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Topic '%s' not found", topicName),
+		})
+	}
 
 	return c.JSON(fiber.Map{
 		"success": true,
@@ -239,7 +226,19 @@ func (s *FiberServer) handleDeleteTopic(c *fiber.Ctx) error {
 	// Parse force flag from query
 	force := c.QueryBool("force", false)
 
-	// TODO: Delete topic from storage
+	// Delete topic from in-memory storage
+	s.topicsMutex.Lock()
+	_, exists := s.topics[topicName]
+	if !exists {
+		s.topicsMutex.Unlock()
+		return c.Status(404).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Topic '%s' not found", topicName),
+		})
+	}
+	delete(s.topics, topicName)
+	s.topicsMutex.Unlock()
+
 	log.Printf("[Native API] Deleted topic: %s (force: %v)", topicName, force)
 
 	return c.JSON(fiber.Map{
@@ -281,31 +280,31 @@ func (s *FiberServer) handleGetTopicPartitions(c *fiber.Ctx) error {
 	// TODO: Get partition info from storage
 	partitions := []fiber.Map{
 		{
-			"partition":       0,
-			"leader":          1,
-			"replicas":        []int{1},
-			"isr":             []int{1},
-			"first_offset":    0,
-			"last_offset":     333,
-			"message_count":   333,
+			"partition":     0,
+			"leader":        1,
+			"replicas":      []int{1},
+			"isr":           []int{1},
+			"first_offset":  0,
+			"last_offset":   333,
+			"message_count": 333,
 		},
 		{
-			"partition":       1,
-			"leader":          1,
-			"replicas":        []int{1},
-			"isr":             []int{1},
-			"first_offset":    0,
-			"last_offset":     333,
-			"message_count":   333,
+			"partition":     1,
+			"leader":        1,
+			"replicas":      []int{1},
+			"isr":           []int{1},
+			"first_offset":  0,
+			"last_offset":   333,
+			"message_count": 333,
 		},
 		{
-			"partition":       2,
-			"leader":          1,
-			"replicas":        []int{1},
-			"isr":             []int{1},
-			"first_offset":    0,
-			"last_offset":     334,
-			"message_count":   334,
+			"partition":     2,
+			"leader":        1,
+			"replicas":      []int{1},
+			"isr":           []int{1},
+			"first_offset":  0,
+			"last_offset":   334,
+			"message_count": 334,
 		},
 	}
 
@@ -345,4 +344,3 @@ func (s *FiberServer) handlePurgeTopic(c *fiber.Ctx) error {
 		"message": fmt.Sprintf("All messages purged from topic '%s'", topicName),
 	})
 }
-
