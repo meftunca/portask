@@ -88,3 +88,5 @@ admin_ui/.parcel-cache/
 admin_ui/.vite/
 **/test_badger_data
 **/quick_badger_data
+**/storage_fixed_*
+**/storage_comp_*
