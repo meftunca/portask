@@ -17,7 +17,7 @@ import (
 type BadgerStore struct {
 	db      *badger.DB
 	dataDir string
-	
+
 	// Metrics
 	messagesWritten atomic.Int64
 	messagesRead    atomic.Int64
@@ -34,29 +34,29 @@ func NewBadgerStore(config *Config) (*BadgerStore, error) {
 	if config.DataDir == "" {
 		config.DataDir = "./badger_data"
 	}
-	
+
 	// Create data directory
 	if err := os.MkdirAll(config.DataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data dir: %w", err)
 	}
-	
+
 	// BadgerDB options optimized for write throughput
 	opts := badger.DefaultOptions(config.DataDir)
-	opts.SyncWrites = false             // Async for speed
-	opts.NumVersionsToKeep = 1          // Don't keep old versions
-	opts.CompactL0OnClose = false       // Fast shutdown
-	opts.ValueLogFileSize = 64 << 20    // 64MB
-	opts.MemTableSize = 64 << 20        // 64MB
-	opts.NumMemtables = 3               // Concurrent writes
+	opts.SyncWrites = false          // Async for speed
+	opts.NumVersionsToKeep = 1       // Don't keep old versions
+	opts.CompactL0OnClose = false    // Fast shutdown
+	opts.ValueLogFileSize = 64 << 20 // 64MB
+	opts.MemTableSize = 64 << 20     // 64MB
+	opts.NumMemtables = 3            // Concurrent writes
 	opts.NumLevelZeroTables = 4
 	opts.NumLevelZeroTablesStall = 8
-	opts.Logger = nil                   // Disable logging for speed
-	
+	opts.Logger = nil // Disable logging for speed
+
 	db, err := badger.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open badger: %w", err)
 	}
-	
+
 	return &BadgerStore{
 		db:      db,
 		dataDir: config.DataDir,
@@ -70,22 +70,22 @@ func (b *BadgerStore) Store(ctx context.Context, message *types.PortaskMessage) 
 	if err != nil {
 		return err
 	}
-	
+
 	// Write to BadgerDB
 	key := []byte(fmt.Sprintf("msg:%s", message.ID))
-	
+
 	err = b.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, data)
 	})
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// Update metrics
 	b.messagesWritten.Add(1)
 	b.bytesWritten.Add(int64(len(data)))
-	
+
 	return nil
 }
 
@@ -94,7 +94,7 @@ func (b *BadgerStore) StoreBatch(ctx context.Context, batch *types.MessageBatch)
 	if batch == nil || len(batch.Messages) == 0 {
 		return nil
 	}
-	
+
 	// Use BadgerDB transaction for batch write
 	err := b.db.Update(func(txn *badger.Txn) error {
 		for _, message := range batch.Messages {
@@ -103,24 +103,24 @@ func (b *BadgerStore) StoreBatch(ctx context.Context, batch *types.MessageBatch)
 			if err != nil {
 				return err
 			}
-			
+
 			// Write to transaction
 			key := []byte(fmt.Sprintf("msg:%s", message.ID))
 			if err := txn.Set(key, data); err != nil {
 				return err
 			}
-			
+
 			b.bytesWritten.Add(int64(len(data)))
 		}
 		return nil
 	})
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	b.messagesWritten.Add(int64(len(batch.Messages)))
-	
+
 	return nil
 }
 
@@ -238,4 +238,3 @@ func (b *BadgerStore) Ping(ctx context.Context) error {
 func (b *BadgerStore) Cleanup(ctx context.Context, retentionPolicy *storage.RetentionPolicy) error {
 	return nil
 }
-
