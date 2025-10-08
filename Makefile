@@ -299,3 +299,78 @@ info:
 	@echo "  Go files: $(shell find . -name "*.go" -type f -not -path "./vendor/*" | wc -l)"
 	@echo "  Lines of code: $(shell find . -name "*.go" -type f -not -path "./vendor/*" -exec cat {} \; | wc -l)"
 	@echo "  Test files: $(shell find . -name "*_test.go" -type f | wc -l)"
+
+## Storage Backend Targets
+
+## build-rocksdb: Build with RocksDB support (requires C++ deps)
+.PHONY: build-rocksdb
+build-rocksdb:
+	@echo "🪨 Building with RocksDB support..."
+	@if [ "$(shell uname)" = "Darwin" ]; then \
+		export CGO_CFLAGS="-I/opt/homebrew/opt/rocksdb/include"; \
+		export CGO_LDFLAGS="-L/opt/homebrew/opt/rocksdb/lib -L/opt/homebrew/opt/zstd/lib -L/opt/homebrew/opt/lz4/lib -L/opt/homebrew/opt/snappy/lib -lrocksdb -lzstd -llz4 -lsnappy"; \
+		go build ${LDFLAGS} -tags rocksdb -o ${BUILD_DIR}/${BINARY_NAME} ${BINARY_PATH}; \
+	else \
+		export CGO_CFLAGS="-I/usr/include"; \
+		export CGO_LDFLAGS="-lrocksdb -lzstd -llz4 -lsnappy"; \
+		go build ${LDFLAGS} -tags rocksdb -o ${BUILD_DIR}/${BINARY_NAME} ${BINARY_PATH}; \
+	fi
+	@echo "✅ RocksDB build complete"
+
+## test-storage: Run storage backend comparison tests
+.PHONY: test-storage
+test-storage:
+	@echo "🧪 Testing storage backends..."
+	@if [ "$(shell uname)" = "Darwin" ]; then \
+		export CGO_CFLAGS="-I/opt/homebrew/opt/rocksdb/include"; \
+		export CGO_LDFLAGS="-L/opt/homebrew/opt/rocksdb/lib -L/opt/homebrew/opt/zstd/lib -L/opt/homebrew/opt/lz4/lib -L/opt/homebrew/opt/snappy/lib -lrocksdb -lzstd -llz4 -lsnappy"; \
+		go test -v -run TestStorageComparison ./benchmarks/; \
+	else \
+		go test -v -run TestStorageComparison ./benchmarks/; \
+	fi
+
+## install-rocksdb-deps: Install RocksDB dependencies (macOS)
+.PHONY: install-rocksdb-deps
+install-rocksdb-deps:
+	@echo "📦 Installing RocksDB dependencies..."
+	@if [ "$(shell uname)" = "Darwin" ]; then \
+		brew install rocksdb zstd lz4 snappy; \
+		echo "✅ RocksDB dependencies installed (Homebrew)"; \
+	elif [ -f /etc/debian_version ]; then \
+		sudo apt-get update && sudo apt-get install -y librocksdb-dev libzstd-dev liblz4-dev libsnappy-dev; \
+		echo "✅ RocksDB dependencies installed (apt)"; \
+	else \
+		echo "⚠️  Unsupported OS. Please install: rocksdb, zstd, lz4, snappy manually"; \
+	fi
+
+## storage-info: Show storage backend information
+.PHONY: storage-info
+storage-info:
+	@echo "📊 Storage Backend Information"
+	@echo "==============================="
+	@echo ""
+	@echo "Available Backends:"
+	@echo "  1. Dragonfly (Network) - Always available"
+	@echo "  2. BadgerDB (Local)    - Pure Go, always available"
+	@echo "  3. RocksDB (Local)     - C++, requires deps"
+	@echo ""
+	@echo "RocksDB Status:"
+	@if [ "$(shell uname)" = "Darwin" ]; then \
+		if [ -d "/opt/homebrew/opt/rocksdb" ]; then \
+			echo "  ✅ RocksDB installed (Homebrew)"; \
+			echo "  Path: /opt/homebrew/opt/rocksdb"; \
+		else \
+			echo "  ❌ RocksDB not found"; \
+			echo "  Install: make install-rocksdb-deps"; \
+		fi; \
+	else \
+		if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists rocksdb; then \
+			echo "  ✅ RocksDB installed"; \
+		else \
+			echo "  ❌ RocksDB not found"; \
+			echo "  Install: make install-rocksdb-deps"; \
+		fi; \
+	fi
+	@echo ""
+	@echo "See: STORAGE_BENCHMARK_RESULTS.md for performance comparison"
+
