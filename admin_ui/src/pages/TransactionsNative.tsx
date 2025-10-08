@@ -2,8 +2,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TransactionModal } from '@/components/modals/TransactionModal'
 import { apiBase } from '@/lib/api'
-import { Activity, Blocks, CheckCircle, Plus, RefreshCw, XCircle } from 'lucide-react'
+import { Activity, Blocks, CheckCircle, Eye, Plus, RefreshCw, XCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 interface Transaction {
@@ -21,6 +22,10 @@ export default function TransactionsNative() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Modal state
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
 
   const fetchTransactions = async () => {
     setLoading(true)
@@ -198,7 +203,14 @@ export default function TransactionsNative() {
               </TableHeader>
               <TableBody>
                 {transactions.map((txn) => (
-                  <TableRow key={txn.id}>
+                  <TableRow 
+                    key={txn.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      setSelectedTransaction(txn)
+                      setShowDetailModal(true)
+                    }}
+                  >
                     <TableCell className="font-mono text-xs">{txn.id.substring(0, 12)}...</TableCell>
                     <TableCell>
                       <Badge variant={getStateBadgeVariant(txn.state)} className={getStateColor(txn.state)}>
@@ -211,22 +223,17 @@ export default function TransactionsNative() {
                     <TableCell>{new Date(txn.created_at).toLocaleTimeString()}</TableCell>
                     <TableCell>{new Date(txn.expires_at).toLocaleTimeString()}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        {txn.state === 'ACTIVE' && (
-                          <>
-                            <Button variant="outline" size="sm" className="text-green-600">
-                              Commit
-                            </Button>
-                            <Button variant="outline" size="sm" className="text-red-600">
-                              Abort
-                            </Button>
-                          </>
-                        )}
-                        {txn.state !== 'ACTIVE' && (
-                          <Button variant="outline" size="sm">
-                            View
-                          </Button>
-                        )}
+                      <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTransaction(txn)
+                            setShowDetailModal(true)
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -236,6 +243,14 @@ export default function TransactionsNative() {
           )}
         </CardContent>
       </Card>
+
+      {/* Transaction Detail Modal */}
+      <TransactionModal
+        transaction={selectedTransaction}
+        open={showDetailModal}
+        onOpenChange={setShowDetailModal}
+        onUpdate={fetchTransactions}
+      />
     </div>
   )
 }

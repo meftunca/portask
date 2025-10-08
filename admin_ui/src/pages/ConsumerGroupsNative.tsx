@@ -2,8 +2,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ConsumerGroupModal } from '@/components/modals/ConsumerGroupModal'
 import { apiBase } from '@/lib/api'
-import { Activity, Plus, RefreshCw, TrendingDown, Users } from 'lucide-react'
+import { Activity, Eye, Plus, RefreshCw, TrendingDown, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 interface ConsumerGroup {
@@ -21,6 +22,10 @@ export default function ConsumerGroupsNative() {
   const [groups, setGroups] = useState<ConsumerGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Modal state
+  const [selectedGroup, setSelectedGroup] = useState<ConsumerGroup | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
 
   const fetchGroups = async () => {
     setLoading(true)
@@ -172,7 +177,14 @@ export default function ConsumerGroupsNative() {
               </TableHeader>
               <TableBody>
                 {groups.map((group) => (
-                  <TableRow key={group.id}>
+                  <TableRow 
+                    key={group.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      setSelectedGroup(group)
+                      setShowDetailModal(true)
+                    }}
+                  >
                     <TableCell className="font-medium">{group.name}</TableCell>
                     <TableCell>
                       <Badge variant={getStateBadgeVariant(group.state)}>
@@ -187,12 +199,16 @@ export default function ConsumerGroupsNative() {
                     <TableCell>{group.generation}</TableCell>
                     <TableCell>{new Date(group.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="outline" size="sm">
-                          View
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          Lag
+                      <div className="flex justify-end space-x-2" onClick={(e) => e.stopPropagation()}>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedGroup(group)
+                            setShowDetailModal(true)
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -203,6 +219,13 @@ export default function ConsumerGroupsNative() {
           )}
         </CardContent>
       </Card>
+
+      {/* Consumer Group Detail Modal */}
+      <ConsumerGroupModal
+        group={selectedGroup}
+        open={showDetailModal}
+        onOpenChange={setShowDetailModal}
+      />
     </div>
   )
 }
