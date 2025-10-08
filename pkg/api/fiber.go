@@ -213,6 +213,14 @@ func (s *FiberServer) setupRoutes() {
 	// API v1 routes
 	v1 := s.app.Group("/api/v1")
 
+	// Core monitoring endpoints (also available at v1)
+	v1.Get("/health", s.handleHealthFiber)
+	v1.Get("/metrics", s.handleMetricsFiber)
+	v1.Get("/status", s.handleStatusFiber)
+
+	// WebSocket endpoint for v1
+	v1.Get("/ws", websocket.New(s.handleWebSocketConnection))
+
 	// Message endpoints
 	v1.Get("/messages", s.handleMessagesFiber)
 	v1.Post("/messages/publish", s.handlePublishFiber)
@@ -259,10 +267,7 @@ func (s *FiberServer) setupRoutes() {
 	batchMessages.Post("/ack", s.handleBatchAck)                             // Batch acknowledge
 	batchMessages.Post("/nack", s.handleBatchNack)                           // Batch negative ack
 
-	// WebSocket Real-Time Consumption
-	ws := v1.Group("/ws")
-	ws.Get("/health", s.handleWebSocketHealth)                               // WS health check
-	// WebSocket upgrade handled separately in setupRoutes
+	// WebSocket Real-Time Consumption (handled above with websocket.New)
 
 	// Transactions (Unified for Kafka + AMQP)
 	transactions := v1.Group("/transactions")
