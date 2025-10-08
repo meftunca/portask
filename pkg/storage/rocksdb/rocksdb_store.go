@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 
-	"github.com/tecbot/gorocksdb"
+	"github.com/linxGnu/grocksdb"
 
 	"github.com/meftunca/portask/pkg/storage"
 	"github.com/meftunca/portask/pkg/types"
@@ -17,9 +16,10 @@ import (
 
 // RocksDBStore implements MessageStore using RocksDB for local storage
 type RocksDBStore struct {
-	db       *gorocksdb.DB
-	wo       *gorocksdb.WriteOptions
-	ro       *gorocksdb.ReadOptions
+	db       *grocksdb.DB
+	wo       *grocksdb.WriteOptions
+	ro       *grocksdb.ReadOptions
+	opts     *grocksdb.Options
 	dataDir  string
 	mu       sync.RWMutex
 	
@@ -33,10 +33,33 @@ type RocksDBStore struct {
 // Config for RocksDB
 type Config struct {
 	DataDir string
+	
+	// Performance tuning
+	WriteBufferSize      int  // Default: 64MB
+	MaxWriteBufferNumber int  // Default: 3
+	MaxBackgroundJobs    int  // Default: 4
+	EnableCompression    bool // Default: false
+	DisableWAL           bool // Default: false (disable for max speed)
+}
+
+// DefaultConfig returns default RocksDB configuration
+func DefaultConfig() *Config {
+	return &Config{
+		DataDir:              "./rocksdb_data",
+		WriteBufferSize:      64 * 1024 * 1024, // 64MB
+		MaxWriteBufferNumber: 3,
+		MaxBackgroundJobs:    4,
+		EnableCompression:    false,
+		DisableWAL:           false,
+	}
 }
 
 // NewRocksDBStore creates a new RocksDB storage backend
 func NewRocksDBStore(config *Config) (*RocksDBStore, error) {
+	if config == nil {
+		config = DefaultConfig()
+	}
+	
 	if config.DataDir == "" {
 		config.DataDir = "./rocksdb_data"
 	}
@@ -46,33 +69,58 @@ func NewRocksDBStore(config *Config) (*RocksDBStore, error) {
 		return nil, fmt.Errorf("failed to create data dir: %w", err)
 	}
 	
-	// RocksDB options optimized for performance
-	opts := gorocksdb.NewDefaultOptions()
+	// RocksDB options optimized for write-heavy workloads
+	opts := grocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
-	opts.SetCompression(gorocksdb.NoCompression) // Fast writes, no compression
-	opts.SetWriteBufferSize(64 * 1024 * 1024)    // 64MB write buffer
-	opts.SetMaxWriteBufferNumber(3)
-	opts.SetTargetFileSizeBase(64 * 1024 * 1024)
-	opts.SetMaxBackgroundCompactions(4)
-	opts.SetMaxBackgroundFlushes(2)
+	
+	// Compression
+	if config.EnableCompression {
+		opts.SetCompression(grocksdb.LZ4Compression)
+	} else {
+		opts.SetCompression(grocksdb.NoCompression)
+	}
+	
+	// Memory & write buffer
+	opts.SetWriteBufferSize(uint64(config.WriteBufferSize))
+	opts.SetMaxWriteBufferNumber(config.MaxWriteBufferNumber)
+	opts.SetMinWriteBufferNumberToMerge(1)
+	
+	// File sizes
+	opts.SetTargetFileSizeBase(64 * 1024 * 1024) // 64MB
+	opts.SetMaxBytesForLevelBase(256 * 1024 * 1024) // 256MB
+	
+	// Background jobs
+	opts.SetMaxBackgroundJobs(config.MaxBackgroundJobs)
+	
+	// Performance optimizations
 	opts.SetBytesPerSync(1024 * 1024) // 1MB
 	
+	// Disable stats for speed
+	opts.SetStatsDumpPeriodSec(0)
+	
 	// Open database
-	db, err := gorocksdb.OpenDb(opts, config.DataDir)
+	db, err := grocksdb.OpenDb(opts, config.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open rocksdb: %w", err)
 	}
 	
-	// Write/Read options
-	wo := gorocksdb.NewDefaultWriteOptions()
-	wo.SetSync(false) // Async writes for speed
+	// Write options
+	wo := grocksdb.NewDefaultWriteOptions()
+	if config.DisableWAL {
+		wo.DisableWAL(true) // DANGEROUS: Max speed but no durability
+	} else {
+		wo.SetSync(false) // Async writes
+	}
 	
-	ro := gorocksdb.NewDefaultReadOptions()
+	// Read options
+	ro := grocksdb.NewDefaultReadOptions()
+	ro.SetVerifyChecksums(false) // Skip checksums for speed
 	
 	return &RocksDBStore{
 		db:      db,
 		wo:      wo,
 		ro:      ro,
+		opts:    opts,
 		dataDir: config.DataDir,
 	}, nil
 }
@@ -107,7 +155,7 @@ func (r *RocksDBStore) StoreBatch(ctx context.Context, batch *types.MessageBatch
 	}
 	
 	// Use RocksDB WriteBatch for atomic batch writes
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	
 	for _, message := range batch.Messages {
