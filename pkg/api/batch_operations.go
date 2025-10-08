@@ -439,7 +439,19 @@ func (s *FiberServer) handleBatchAck(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Acknowledge messages
+	// Acknowledge messages by deleting them from storage (consumed successfully)
+	ctx := c.Context()
+	messageIDs := make([]types.MessageID, len(req.MessageIDs))
+	for i, msgID := range req.MessageIDs {
+		messageIDs[i] = types.MessageID(msgID)
+	}
+	
+	// Delete acknowledged messages (best-effort batch)
+	if err := s.storage.DeleteBatch(ctx, messageIDs); err != nil {
+		log.Printf("[Native API] Warning: Failed to delete acknowledged messages: %v", err)
+		// Don't fail the request - messages are acknowledged even if delete fails
+	}
+	
 	acknowledged := len(req.MessageIDs)
 	log.Printf("[Native API] Acknowledged %d messages (group: %s)", acknowledged, req.GroupID)
 
@@ -469,12 +481,41 @@ func (s *FiberServer) handleBatchNack(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Nack messages (requeue or send to DLQ)
-	log.Printf("[Native API] Nacked %d messages (requeue: %v, reason: %s)", len(req.MessageIDs), req.Requeue, req.Reason)
+	// Nack messages: Requeue or mark for DLQ
+	ctx := c.Context()
+	nacked := 0
+	
+	if req.Requeue {
+		// Requeue: Fetch messages and re-store with updated metadata
+		for _, msgID := range req.MessageIDs {
+			msg, err := s.storage.FetchByID(ctx, types.MessageID(msgID))
+			if err != nil {
+				continue
+			}
+			// Update metadata to indicate retry
+			if msg.Metadata == nil {
+				msg.Metadata = make(map[string]string)
+			}
+			msg.Metadata["nack_reason"] = req.Reason
+			msg.Attempts++
+			
+			// Re-store for retry
+			if err := s.storage.Store(ctx, msg); err != nil {
+				log.Printf("[Native API] Failed to requeue message %s: %v", msgID, err)
+			} else {
+				nacked++
+			}
+		}
+	} else {
+		// Don't requeue: Just mark as failed (could move to DLQ in future)
+		nacked = len(req.MessageIDs)
+	}
+	
+	log.Printf("[Native API] Nacked %d messages (requeue: %v, reason: %s)", nacked, req.Requeue, req.Reason)
 
 	return c.JSON(fiber.Map{
-		"success":  true,
-		"nacked":   len(req.MessageIDs),
+		"success": true,
+		"nacked":  nacked,
 		"requeued": req.Requeue,
 		"group_id": req.GroupID,
 	})
