@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Activity, Database, MessageSquare, Network, Server, Users } from 'lucide-react'
+import { Activity, Database, MessageSquare, Network, Server, Users, Wifi, WifiOff } from 'lucide-react'
 import { api, apiBase } from '@/lib/api'
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useMetricsWebSocket } from '@/hooks/useWebSocket'
 
 interface SystemMetrics {
   uptime: string
@@ -30,9 +31,64 @@ export default function Dashboard() {
   const [isConnected, setIsConnected] = useState(false)
   const [throughputData, setThroughputData] = useState<Array<{time: string, messages: number, latency: number}>>([])
   const [memoryData, setMemoryData] = useState<Array<{time: string, alloc: number, sys: number}>>([])
+  
+  // WebSocket for real-time updates
+  const { data: wsData, isConnected: wsConnected } = useMetricsWebSocket()
 
+  // Update metrics from WebSocket if available
   useEffect(() => {
-    // Gerçek API'den veri çek
+    if (wsData && wsConnected) {
+      console.log('[Dashboard] WebSocket data received:', wsData)
+      
+      // Process WebSocket metrics update
+      const data = wsData
+      const newMetrics = {
+        uptime: data.core?.uptime_seconds ? `${Math.round(data.core.uptime_seconds)}s` : '0s',
+        connections: data.network?.connections_active || 0,
+        messages_total: data.storage?.total_messages || 0,
+        memory_usage: `${data.system?.alloc_mb || 0} MB`,
+        cpu_usage: '0%',
+        status: 'healthy',
+        goroutines: data.system?.num_goroutines || 0,
+        gc_count: data.system?.num_gc || 0,
+        messages_rate: data.network?.messages_received || 0
+      }
+      setMetrics(newMetrics)
+      setIsConnected(true)
+
+      // Update chart data
+      const now = new Date().toLocaleTimeString()
+      
+      setThroughputData(prev => {
+        const newData = [...prev, {
+          time: now,
+          messages: data.storage?.total_messages || 0,
+          latency: data.core?.avg_latency_ms || 0
+        }]
+        return newData.slice(-20)
+      })
+
+      setMemoryData(prev => {
+        const newData = [...prev, {
+          time: now,
+          alloc: data.system?.alloc_mb || 0,
+          sys: data.system?.sys_mb || 0
+        }]
+        return newData.slice(-20)
+      })
+    }
+  }, [wsData, wsConnected])
+
+  // Fallback to HTTP polling if WebSocket is not connected
+  useEffect(() => {
+    // Only use polling if WebSocket is not connected
+    if (wsConnected) {
+      console.log('[Dashboard] Using WebSocket, skipping HTTP polling')
+      return
+    }
+
+    console.log('[Dashboard] WebSocket not available, using HTTP polling')
+    
     const fetchMetrics = async () => {
       try {
         const response = await apiBase.get('/metrics',)
@@ -55,24 +111,22 @@ export default function Dashboard() {
         // Update chart data
         const now = new Date().toLocaleTimeString()
         
-        // Throughput chart data
         setThroughputData(prev => {
           const newData = [...prev, {
             time: now,
             messages: data.storage?.total_messages || 0,
             latency: data.core?.avg_latency_ms || 0
           }]
-          return newData.slice(-20) // Keep last 20 points
+          return newData.slice(-20)
         })
 
-        // Memory chart data
         setMemoryData(prev => {
           const newData = [...prev, {
             time: now,
             alloc: data.system?.alloc_mb || 0,
             sys: data.system?.sys_mb || 0
           }]
-          return newData.slice(-20) // Keep last 20 points
+          return newData.slice(-20)
         })
         
       } catch (error) {
@@ -80,10 +134,11 @@ export default function Dashboard() {
         setMetrics((m) => ({ ...m, status: 'disconnected' }))
       }
     }
+    
     fetchMetrics()
     const interval = setInterval(fetchMetrics, 5000)
     return () => clearInterval(interval)
-  }, [])
+  }, [wsConnected])
 
   const cards = [
     {
@@ -156,6 +211,17 @@ export default function Dashboard() {
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <div className="flex items-center space-x-2">
+          {wsConnected ? (
+            <div className="flex items-center space-x-2 px-3 py-1 rounded-md bg-green-500/10 border border-green-500/20">
+              <Wifi className="h-4 w-4 text-green-600" />
+              <span className="text-xs font-medium text-green-600">Real-time</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2 px-3 py-1 rounded-md bg-orange-500/10 border border-orange-500/20">
+              <WifiOff className="h-4 w-4 text-orange-600" />
+              <span className="text-xs font-medium text-orange-600">Polling (5s)</span>
+            </div>
+          )}
           <Button variant="outline" size="sm">
             Refresh
           </Button>
