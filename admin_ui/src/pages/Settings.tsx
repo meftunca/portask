@@ -108,10 +108,13 @@ const Settings: React.FC = () => {
     queryKey: ['settings'],
     queryFn: async () => {
       const res = await api.get('/admin/config')
+      // Backend farklı format dönüyor, default settings kullan
       return res.data as SettingsData
-    }
+    },
+    retry: false,
+    // Hata durumunda default settings kullan
+    placeholderData: defaultSettings
   })
-  console.log("data",data)
 
   // Ayarları backend'e kaydet
   const mutation = useMutation({
@@ -123,16 +126,15 @@ const Settings: React.FC = () => {
     }
   })
 
-  // Form state'leri
-  const [serverConfig, setServerConfig] = useState<ServerConfig>(localSettings.serverConfig)
-  const [dbConfig, setDbConfig] = useState<DatabaseConfig>(localSettings.dbConfig)
-  const [securityConfig, setSecurityConfig] = useState<SecurityConfig>(localSettings.securityConfig)
-  const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(localSettings.notificationConfig)
+  // Form state'leri - default values ile başlat
+  const [serverConfig, setServerConfig] = useState<ServerConfig>(defaultSettings.serverConfig)
+  const [dbConfig, setDbConfig] = useState<DatabaseConfig>(defaultSettings.dbConfig)
+  const [securityConfig, setSecurityConfig] = useState<SecurityConfig>(defaultSettings.securityConfig)
+  const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(defaultSettings.notificationConfig)
 
   // Ayarlar yüklendiğinde form state'lerini güncelle
   React.useEffect(() => {
-    if (data) {
-      console.log("data",data)
+    if (data?.serverConfig && data?.dbConfig && data?.securityConfig && data?.notificationConfig) {
       setServerConfig(data.serverConfig)
       setDbConfig(data.dbConfig)
       setSecurityConfig(data.securityConfig)
