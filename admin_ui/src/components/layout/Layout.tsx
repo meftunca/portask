@@ -12,7 +12,8 @@ import {
   Menu,
   X,
   Users,
-  Zap
+  Zap,
+  Rabbit
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Topics', href: '/topics', icon: Database },
   { name: 'Consumer Groups', href: '/consumer-groups', icon: Users },
   { name: 'Kafka', href: '/kafka', icon: Zap },
+  { name: 'AMQP / RabbitMQ', href: '/amqp', icon: Rabbit },
   { name: 'Connections', href: '/connections', icon: Network },
   { name: 'Monitoring', href: '/monitoring', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
