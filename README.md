@@ -25,6 +25,7 @@
 - **DragonflyDB** - In-memory storage with Redis compatibility (355K msgs/sec)
 - **BadgerDB** - Pure Go embedded key-value store (207K msgs/sec)
 - **RocksDB** - High-performance persistent storage (218K msgs/sec)
+- **DuckDB** - Analytics-grade column-store with ultra-fast batch inserts (NEW! 🦆)
 
 ### Parallel Batch Processing
 
@@ -71,12 +72,12 @@ config.EnableParallelWrites = true  // Toggle parallel mode
 
 ### Hardware Requirements Comparison
 
-| System            | Min CPU | Min RAM | Throughput    | Cost/Month | Cost per 1M msgs |
-| ----------------- | ------- | ------- | ------------- | ---------- | ---------------- |
-| **Portask**       | 4 vCPU  | 4GB     | 355K msgs/sec | ~$40       | **$0.11** ✅     |
-| Redis Queue (RQ)  | 8 vCPU  | 16GB    | 250K msgs/sec | ~$120      | $0.48            |
-| Apache Kafka      | 16 vCPU | 32GB    | 500K msgs/sec | ~$300      | $0.60            |
-| Kafka (High-End)  | 32 vCPU | 192GB   | 1M msgs/sec   | ~$800      | $0.80            |
+| System           | Min CPU | Min RAM | Throughput    | Cost/Month | Cost per 1M msgs |
+| ---------------- | ------- | ------- | ------------- | ---------- | ---------------- |
+| **Portask**      | 4 vCPU  | 4GB     | 355K msgs/sec | ~$40       | **$0.11** ✅     |
+| Redis Queue (RQ) | 8 vCPU  | 16GB    | 250K msgs/sec | ~$120      | $0.48            |
+| Apache Kafka     | 16 vCPU | 32GB    | 500K msgs/sec | ~$300      | $0.60            |
+| Kafka (High-End) | 32 vCPU | 192GB   | 1M msgs/sec   | ~$800      | $0.80            |
 
 **Portask wins on cost-effectiveness: 5-7x cheaper per message!** 🚀
 
@@ -84,25 +85,26 @@ config.EnableParallelWrites = true  // Toggle parallel mode
 
 #### Scenario: 10 Billion Messages/Month
 
-| System                | Hardware Needed      | Monthly Cost | Total Cost/Year |
-| --------------------- | -------------------- | ------------ | --------------- |
-| **Portask (4 nodes)** | 4×(4vCPU, 8GB)       | **$160**     | **$1,920** ✅   |
-| Redis (8 nodes)       | 8×(8vCPU, 16GB)      | $960         | $11,520         |
-| Kafka (12 nodes)      | 12×(16vCPU, 32GB)    | $3,600       | $43,200         |
-| Kafka High-End (6)    | 6×(32vCPU, 192GB)    | $4,800       | $57,600         |
+| System                | Hardware Needed   | Monthly Cost | Total Cost/Year |
+| --------------------- | ----------------- | ------------ | --------------- |
+| **Portask (4 nodes)** | 4×(4vCPU, 8GB)    | **$160**     | **$1,920** ✅   |
+| Redis (8 nodes)       | 8×(8vCPU, 16GB)   | $960         | $11,520         |
+| Kafka (12 nodes)      | 12×(16vCPU, 32GB) | $3,600       | $43,200         |
+| Kafka High-End (6)    | 6×(32vCPU, 192GB) | $4,800       | $57,600         |
 
 **Savings with Portask:**
+
 - vs Redis: $10,000/year (83% cheaper!)
 - vs Kafka: $41,000/year (94% cheaper!)
 - vs Kafka High-End: $56,000/year (96% cheaper!)
 
 #### Scenario: Startup (100M messages/month)
 
-| System          | Hardware      | Monthly Cost | Comments                        |
-| --------------- | ------------- | ------------ | ------------------------------- |
-| **Portask**     | 1×(4vCPU,4GB) | **$40**      | Single instance handles it! ✅  |
-| Redis           | 1×(8vCPU,16GB)| $120         | 3x more expensive               |
-| Kafka           | 3 nodes min   | $300+        | Overkill for this scale         |
+| System      | Hardware       | Monthly Cost | Comments                       |
+| ----------- | -------------- | ------------ | ------------------------------ |
+| **Portask** | 1×(4vCPU,4GB)  | **$40**      | Single instance handles it! ✅ |
+| Redis       | 1×(8vCPU,16GB) | $120         | 3x more expensive              |
+| Kafka       | 3 nodes min    | $300+        | Overkill for this scale        |
 
 **Winner: Portask** - Perfect for startups and cost-conscious deployments!
 
