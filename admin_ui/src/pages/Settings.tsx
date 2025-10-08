@@ -1,21 +1,21 @@
-import React, { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  Server, 
-  Database, 
-  Shield, 
-  Bell,
-  Save,
-  RefreshCw
-} from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Bell,
+  Database,
+  RefreshCw,
+  Save,
+  Server,
+  Shield
+} from 'lucide-react'
+import React, { useState } from 'react'
 
 interface ServerConfig {
   host: string
