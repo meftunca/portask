@@ -55,9 +55,9 @@ type PublishResult struct {
 // BatchFetchRequest for fetching multiple messages
 type BatchFetchRequest struct {
 	Topics         []TopicFetchRequest `json:"topics" validate:"required"`
-	MaxMessages    int                 `json:"max_messages"` // Default: 100, Max: 1000
-	MaxWaitMs      int                 `json:"max_wait_ms"`  // Default: 1000
-	MinBytes       int                 `json:"min_bytes"`    // Default: 1
+	MaxMessages    int                 `json:"max_messages"`    // Default: 100, Max: 1000
+	MaxWaitMs      int                 `json:"max_wait_ms"`     // Default: 1000
+	MinBytes       int                 `json:"min_bytes"`       // Default: 1
 	IsolationLevel string              `json:"isolation_level"` // "read_uncommitted" or "read_committed"
 }
 
@@ -198,15 +198,15 @@ func (s *FiberServer) handleBatchPublish(c *fiber.Ctx) error {
 
 		// Create Portask message
 		messageID := types.MessageID(fmt.Sprintf("msg_%d_%s_%d", time.Now().UnixNano(), msg.Topic, i))
-		
+
 		// Initialize headers and metadata
 		headers := make(types.MessageHeaders)
 		if msg.Headers != nil {
 			headers = msg.Headers
 		}
-		
+
 		metadata := make(map[string]string)
-		
+
 		portaskMsg := &types.PortaskMessage{
 			ID:        messageID,
 			Topic:     types.TopicName(msg.Topic),
@@ -249,7 +249,7 @@ func (s *FiberServer) handleBatchPublish(c *fiber.Ctx) error {
 			BatchID:   fmt.Sprintf("batch-%d", time.Now().UnixNano()),
 			CreatedAt: time.Now().Unix(),
 		}
-		
+
 		if err := s.storage.StoreBatch(ctx, messageBatch); err != nil {
 			log.Printf("[Native API] Failed to store batch: %v", err)
 			return c.Status(500).JSON(fiber.Map{
@@ -257,7 +257,7 @@ func (s *FiberServer) handleBatchPublish(c *fiber.Ctx) error {
 				"error":   fmt.Sprintf("Failed to store batch: %v", err),
 			})
 		}
-		
+
 		published = len(batch)
 		log.Printf("[Native API] Published batch to storage: %d messages", published)
 	}
@@ -346,14 +346,14 @@ func (s *FiberServer) handleBatchFetch(c *fiber.Ctx) error {
 			if limit > 100 {
 				limit = 100 // Cap per partition
 			}
-			
+
 			storedMessages, err := s.storage.Fetch(ctx, types.TopicName(topicReq.Topic), partReq.Partition, partReq.FetchOffset, limit)
 			if err != nil {
 				log.Printf("[Native API] Failed to fetch from topic %s partition %d: %v", topicReq.Topic, partReq.Partition, err)
 				// Continue to next partition even if one fails
 				continue
 			}
-			
+
 			// Convert to API format
 			messages := make([]FetchedMessage, 0, len(storedMessages))
 			for _, msg := range storedMessages {
@@ -361,13 +361,13 @@ func (s *FiberServer) handleBatchFetch(c *fiber.Ctx) error {
 				if err := json.Unmarshal(msg.Payload, &value); err != nil {
 					value = string(msg.Payload) // Fallback to string
 				}
-				
+
 				// Convert Metadata map[string]string to map[string]interface{}
 				headers := make(map[string]interface{})
 				for k, v := range msg.Metadata {
 					headers[k] = v
 				}
-				
+
 				messages = append(messages, FetchedMessage{
 					MessageID: string(msg.ID),
 					Offset:    msg.Offset,
@@ -375,7 +375,7 @@ func (s *FiberServer) handleBatchFetch(c *fiber.Ctx) error {
 					Value:     value,
 					Headers:   headers,
 					Timestamp: time.Unix(0, msg.Timestamp).Format(time.RFC3339),
-					Size:      int64(len(msg.Payload)),
+					Size:      len(msg.Payload),
 				})
 			}
 
@@ -473,10 +473,9 @@ func (s *FiberServer) handleBatchNack(c *fiber.Ctx) error {
 	log.Printf("[Native API] Nacked %d messages (requeue: %v, reason: %s)", len(req.MessageIDs), req.Requeue, req.Reason)
 
 	return c.JSON(fiber.Map{
-		"success":      true,
-		"nacked":       len(req.MessageIDs),
-		"requeued":     req.Requeue,
-		"group_id":     req.GroupID,
+		"success":  true,
+		"nacked":   len(req.MessageIDs),
+		"requeued": req.Requeue,
+		"group_id": req.GroupID,
 	})
 }
-

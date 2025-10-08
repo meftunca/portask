@@ -221,7 +221,7 @@ func (s *FiberServer) handleListTopics(c *fiber.Ctx) error {
 	for _, info := range topicInfos {
 		topic := fromTopicInfo(info)
 		topics = append(topics, *topic)
-		
+
 		// Update cache
 		s.topicsMutex.Lock()
 		s.topics[topic.Name] = topic

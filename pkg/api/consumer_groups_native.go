@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/meftunca/portask/pkg/types"
 )
 
 // ==================== UNIFIED NATIVE TYPES ====================
@@ -445,13 +446,36 @@ func (s *FiberServer) handleCommitOffsets(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Commit offsets via offset manager
-	log.Printf("[Native API] Committed %d offsets for group %s", len(req.Offsets), groupID)
+	// Convert to ConsumerOffset and commit to storage
+	ctx := c.Context()
+	consumerOffsets := make([]*types.ConsumerOffset, 0, len(req.Offsets))
+	
+	for _, offsetReq := range req.Offsets {
+		consumerOffsets = append(consumerOffsets, &types.ConsumerOffset{
+			ConsumerID: types.ConsumerID(groupID),
+			Topic:      types.TopicName(offsetReq.Topic),
+			Partition:  offsetReq.Partition,
+			Offset:     offsetReq.Offset,
+			Timestamp:  time.Now().UnixNano(),
+			Metadata:   offsetReq.Metadata,
+		})
+	}
+	
+	// Commit offsets to storage
+	if err := s.storage.CommitOffsetBatch(ctx, consumerOffsets); err != nil {
+		log.Printf("[Native API] Failed to commit offsets for group %s: %v", groupID, err)
+		return c.Status(500).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to commit offsets: %v", err),
+		})
+	}
+	
+	log.Printf("[Native API] Committed %d offsets to storage for group %s", len(req.Offsets), groupID)
 
 	return c.JSON(fiber.Map{
-		"success":        true,
-		"committed":      len(req.Offsets),
-		"group_id":       groupID,
+		"success":   true,
+		"committed": len(consumerOffsets),
+		"group_id":  groupID,
 	})
 }
 
@@ -460,18 +484,31 @@ func (s *FiberServer) handleCommitOffsets(c *fiber.Ctx) error {
 func (s *FiberServer) handleFetchOffsets(c *fiber.Ctx) error {
 	groupID := c.Params("id")
 
-	// TODO: Fetch offsets from offset manager
-	offsets := map[string]map[int32]OffsetMetadata{
-		"orders": {
-			0: {Offset: 100, Metadata: ""},
-			1: {Offset: 150, Metadata: ""},
-		},
-		"payments": {
-			0: {Offset: 50, Metadata: ""},
-		},
+	// Fetch offsets from storage
+	ctx := c.Context()
+	consumerOffsets, err := s.storage.GetConsumerOffsets(ctx, types.ConsumerID(groupID))
+	if err != nil {
+		log.Printf("[Native API] Failed to fetch offsets for group %s: %v", groupID, err)
+		return c.Status(500).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to fetch offsets: %v", err),
+		})
 	}
 
-	log.Printf("[Native API] Fetched offsets for group %s", groupID)
+	// Convert to API format: map[topic]map[partition]OffsetMetadata
+	offsets := make(map[string]map[int32]OffsetMetadata)
+	for _, offset := range consumerOffsets {
+		topicName := string(offset.Topic)
+		if offsets[topicName] == nil {
+			offsets[topicName] = make(map[int32]OffsetMetadata)
+		}
+		offsets[topicName][offset.Partition] = OffsetMetadata{
+			Offset:   offset.Offset,
+			Metadata: offset.Metadata,
+		}
+	}
+
+	log.Printf("[Native API] Fetched %d offsets from storage for group %s", len(consumerOffsets), groupID)
 
 	return c.JSON(fiber.Map{
 		"success": true,
@@ -500,18 +537,74 @@ func (s *FiberServer) handleResetOffsets(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO: Reset offsets via offset manager
+	// Reset offsets in storage
+	ctx := c.Context()
 	topics := req.Topics
+	resetCount := 0
+	
+	// If no topics specified, get all topics for this consumer
 	if len(topics) == 0 {
-		topics = []string{"all"}
+		consumerOffsets, err := s.storage.GetConsumerOffsets(ctx, types.ConsumerID(groupID))
+		if err == nil {
+			topicSet := make(map[string]bool)
+			for _, offset := range consumerOffsets {
+				topicSet[string(offset.Topic)] = true
+			}
+			for topic := range topicSet {
+				topics = append(topics, topic)
+			}
+		}
+	}
+	
+	// Reset offsets for each topic
+	for _, topic := range topics {
+		// Get partition count for topic
+		partitionCount, err := s.storage.GetPartitionCount(ctx, types.TopicName(topic))
+		if err != nil {
+			log.Printf("[Native API] Failed to get partition count for topic %s: %v", topic, err)
+			continue
+		}
+		
+		// Reset each partition
+		for partition := int32(0); partition < partitionCount; partition++ {
+			var newOffset int64
+			if req.Position == "earliest" {
+				newOffset, err = s.storage.GetEarliestOffset(ctx, types.TopicName(topic), partition)
+			} else {
+				newOffset, err = s.storage.GetLatestOffset(ctx, types.TopicName(topic), partition)
+			}
+			
+			if err != nil {
+				log.Printf("[Native API] Failed to get %s offset for %s[%d]: %v", req.Position, topic, partition, err)
+				continue
+			}
+			
+			// Commit the reset offset
+			consumerOffset := &types.ConsumerOffset{
+				ConsumerID: types.ConsumerID(groupID),
+				Topic:      types.TopicName(topic),
+				Partition:  partition,
+				Offset:     newOffset,
+				Timestamp:  time.Now().UnixNano(),
+				Metadata:   fmt.Sprintf("reset to %s", req.Position),
+			}
+			
+			if err := s.storage.CommitOffset(ctx, consumerOffset); err != nil {
+				log.Printf("[Native API] Failed to commit reset offset for %s[%d]: %v", topic, partition, err)
+				continue
+			}
+			
+			resetCount++
+		}
 	}
 
-	log.Printf("[Native API] Reset offsets for group %s to %s (topics: %v)", groupID, req.Position, topics)
+	log.Printf("[Native API] Reset %d offsets to %s for group %s (topics: %v)", resetCount, req.Position, groupID, topics)
 
 	return c.JSON(fiber.Map{
 		"success":  true,
-		"message":  fmt.Sprintf("Offsets reset to %s", req.Position),
+		"message":  fmt.Sprintf("Reset %d offsets to %s", resetCount, req.Position),
 		"group_id": groupID,
+		"count":    resetCount,
 		"topics":   topics,
 	})
 }
