@@ -230,6 +230,23 @@ func (s *FiberServer) setupRoutes() {
 	admin.Post("/shutdown", s.handleShutdownFiber)
 	admin.Get("/config", s.handleConfigFiber)
 	admin.Put("/config", s.handleConfigUpdateFiber)
+
+	// Kafka endpoints
+	kafka := v1.Group("/kafka")
+	kafka.Get("/consumer-groups", s.handleKafkaConsumerGroups)
+	kafka.Get("/consumer-groups/:id", s.handleKafkaConsumerGroupDetail)
+	kafka.Get("/consumer-groups/:id/lag", s.handleKafkaConsumerGroupLag)
+
+	// AMQP endpoints
+	amqp := v1.Group("/amqp")
+	amqp.Get("/queues", s.handleAMQPQueues)
+	amqp.Get("/exchanges", s.handleAMQPExchanges)
+	amqp.Get("/bindings", s.handleAMQPBindings)
+
+	// System endpoints
+	system := v1.Group("/system")
+	system.Get("/workers", s.handleSystemWorkers)
+	system.Get("/storage", s.handleSystemStorage)
 }
 
 // Start starts the Fiber server
