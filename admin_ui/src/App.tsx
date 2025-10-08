@@ -7,6 +7,7 @@ import Dashboard from '@/pages/Dashboard'
 import Messages from '@/pages/Messages'
 import Topics from '@/pages/Topics'
 import ConsumerGroups from '@/pages/ConsumerGroups'
+import KafkaDashboard from '@/pages/KafkaDashboard'
 import Connections from '@/pages/Connections'
 import Monitoring from '@/pages/Monitoring'
 import Settings from '@/pages/Settings'
@@ -33,6 +34,7 @@ function App() {
               <Route path="/messages" element={<Messages />} />
               <Route path="/topics" element={<Topics />} />
               <Route path="/consumer-groups" element={<ConsumerGroups />} />
+              <Route path="/kafka" element={<KafkaDashboard />} />
               <Route path="/connections" element={<Connections />} />
               <Route path="/monitoring" element={<Monitoring />} />
               <Route path="/settings" element={<Settings />} />

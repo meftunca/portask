@@ -11,7 +11,8 @@ import {
   Settings,
   Menu,
   X,
-  Users
+  Users,
+  Zap
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Messages', href: '/messages', icon: MessageSquare },
   { name: 'Topics', href: '/topics', icon: Database },
   { name: 'Consumer Groups', href: '/consumer-groups', icon: Users },
+  { name: 'Kafka', href: '/kafka', icon: Zap },
   { name: 'Connections', href: '/connections', icon: Network },
   { name: 'Monitoring', href: '/monitoring', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
