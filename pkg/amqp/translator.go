@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/meftunca/portask/pkg/memory"
 	"github.com/meftunca/portask/pkg/types"
 )
 
@@ -19,6 +20,7 @@ func NewAMQPTranslator() *AMQPTranslator {
 }
 
 // TranslatePublish converts AMQP Publish to Portask message
+// Uses object pooling to reduce allocations
 func (t *AMQPTranslator) TranslatePublish(
 	exchange string,
 	routingKey string,
@@ -30,26 +32,36 @@ func (t *AMQPTranslator) TranslatePublish(
 		return nil, fmt.Errorf("routing key cannot be empty")
 	}
 	
+	// Get message from pool
+	msg := memory.GetMessage()
+	
 	// Use routing key as topic
 	topic := routingKey
 	if exchange != "" {
 		topic = fmt.Sprintf("%s.%s", exchange, routingKey)
 	}
 	
-	msg := &types.PortaskMessage{
-		ID:        types.MessageID(fmt.Sprintf("amqp-%d", time.Now().UnixNano())),
-		Topic:     types.TopicName(topic),
-		Partition: 0, // AMQP doesn't have partitions
-		Payload:   body,
-		Timestamp: time.Now().UnixNano(),
-		TTL:       0, // Use default from config
-		Metadata: map[string]string{
-			"source":      "amqp",
-			"protocol":    "amqp-0.9.1",
-			"exchange":    exchange,
-			"routing_key": routingKey,
-		},
+	// Set fields
+	msg.ID = types.MessageID(fmt.Sprintf("amqp-%d", time.Now().UnixNano()))
+	msg.Topic = types.TopicName(memory.InternTopic(topic)) // Intern topic string
+	msg.Partition = 0 // AMQP doesn't have partitions
+	
+	// Reuse payload buffer
+	if cap(msg.Payload) >= len(body) {
+		msg.Payload = msg.Payload[:len(body)]
+		copy(msg.Payload, body)
+	} else {
+		msg.Payload = append(msg.Payload[:0], body...)
 	}
+	
+	msg.Timestamp = time.Now().UnixNano()
+	msg.TTL = 0 // Use default from config
+	
+	// Reuse metadata map
+	msg.Metadata["source"] = "amqp"
+	msg.Metadata["protocol"] = "amqp-0.9.1"
+	msg.Metadata["exchange"] = exchange
+	msg.Metadata["routing_key"] = routingKey
 	
 	// Add AMQP properties to metadata
 	if properties != nil {

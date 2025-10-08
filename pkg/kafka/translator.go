@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/meftunca/portask/pkg/memory"
 	"github.com/meftunca/portask/pkg/types"
 )
 
@@ -19,6 +20,7 @@ func NewKafkaTranslator() *KafkaTranslator {
 }
 
 // TranslateProduce converts Kafka Produce request to Portask message
+// Uses object pooling to reduce allocations
 func (t *KafkaTranslator) TranslateProduce(
 	topic string,
 	partition int32,
@@ -30,20 +32,32 @@ func (t *KafkaTranslator) TranslateProduce(
 		return nil, fmt.Errorf("topic cannot be empty")
 	}
 
-	return &types.PortaskMessage{
-		ID:        types.MessageID(fmt.Sprintf("kafka-%d", time.Now().UnixNano())),
-		Topic:     types.TopicName(topic),
-		Partition: partition,
-		Key:       string(key),
-		Payload:   value,
-		Timestamp: time.Now().UnixNano(),
-		TTL:       0, // Use default from config
-		Metadata: map[string]string{
-			"source":   "kafka",
-			"protocol": "kafka-wire",
-			"version":  "2.0",
-		},
-	}, nil
+	// Get message from pool instead of allocating
+	msg := memory.GetMessage()
+	
+	// Set fields
+	msg.ID = types.MessageID(fmt.Sprintf("kafka-%d", time.Now().UnixNano()))
+	msg.Topic = types.TopicName(memory.InternTopic(topic)) // Intern topic string
+	msg.Partition = partition
+	msg.Key = string(key)
+	
+	// Reuse payload buffer if possible
+	if cap(msg.Payload) >= len(value) {
+		msg.Payload = msg.Payload[:len(value)]
+		copy(msg.Payload, value)
+	} else {
+		msg.Payload = append(msg.Payload[:0], value...)
+	}
+	
+	msg.Timestamp = time.Now().UnixNano()
+	msg.TTL = 0 // Use default from config
+	
+	// Reuse metadata map (already pre-allocated in pool)
+	msg.Metadata["source"] = "kafka"
+	msg.Metadata["protocol"] = "kafka-wire"
+	msg.Metadata["version"] = "2.0"
+
+	return msg, nil
 }
 
 // TranslateFetch converts Kafka Fetch request to Portask fetch request

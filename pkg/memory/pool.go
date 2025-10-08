@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+	
+	"github.com/meftunca/portask/pkg/types"
 )
 
 // PoolEvent represents a diagnostic event for the pool
@@ -857,3 +859,62 @@ for _, event := range customPool.GetEvents() {
 	fmt.Println(event.Time, event.Type, event.Message)
 }
 */
+
+// PortaskMessagePool is a pool of reusable PortaskMessage objects
+var portaskMessagePool = sync.Pool{
+	New: func() interface{} {
+		return &types.PortaskMessage{
+			Metadata: make(map[string]string, 8),  // Pre-allocate for common case
+			Headers:  make(types.MessageHeaders, 4), // Pre-allocate
+		}
+	},
+}
+
+// GetMessage retrieves a PortaskMessage from the pool
+func GetMessage() *types.PortaskMessage {
+	msg := portaskMessagePool.Get().(*types.PortaskMessage)
+	return msg
+}
+
+// PutMessage returns a PortaskMessage to the pool after resetting it
+func PutMessage(msg *types.PortaskMessage) {
+	if msg == nil {
+		return
+	}
+	msg.Reset()
+	portaskMessagePool.Put(msg)
+}
+
+// StringInterner for topic names
+type StringInterner struct {
+	mu    sync.RWMutex
+	cache map[string]string
+}
+
+var globalTopicInterner = &StringInterner{
+	cache: make(map[string]string, 1000),
+}
+
+// InternTopic interns a topic name
+func InternTopic(topic string) string {
+	// Fast path: read lock
+	globalTopicInterner.mu.RLock()
+	if cached, ok := globalTopicInterner.cache[topic]; ok {
+		globalTopicInterner.mu.RUnlock()
+		return cached
+	}
+	globalTopicInterner.mu.RUnlock()
+	
+	// Slow path: write lock
+	globalTopicInterner.mu.Lock()
+	defer globalTopicInterner.mu.Unlock()
+	
+	// Double-check after acquiring write lock
+	if cached, ok := globalTopicInterner.cache[topic]; ok {
+		return cached
+	}
+	
+	// Store and return
+	globalTopicInterner.cache[topic] = topic
+	return topic
+}

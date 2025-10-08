@@ -9,6 +9,7 @@ Gap:                 2.76x improvement needed
 ```
 
 **Current Bottlenecks (Profiling Results):**
+
 - Translation: 1.66 μs (0.2%) ✅ Minimal
 - Message Creation: 0.02 μs (0.0%) ✅ Negligible
 - Dragonfly Write: 1,015 μs (99.8%) ⚠️ Still dominant
@@ -23,6 +24,7 @@ Gap:                 2.76x improvement needed
 **Problem:** 7 mallocs/msg causing GC pressure
 
 **Solution:**
+
 ```go
 // Create global pools
 var (
@@ -33,7 +35,7 @@ var (
             }
         },
     }
-    
+
     bufferPool = sync.Pool{
         New: func() interface{} {
             return make([]byte, 0, 1024)
@@ -45,7 +47,7 @@ var (
 func (t *KafkaTranslator) TranslateProduce(...) (*types.PortaskMessage, error) {
     msg := messagePool.Get().(*types.PortaskMessage)
     defer messagePool.Put(msg) // Return to pool
-    
+
     // Reuse message object
     msg.Topic = types.TopicName(topic)
     msg.Payload = payload
@@ -58,12 +60,14 @@ func (t *KafkaTranslator) TranslateProduce(...) (*types.PortaskMessage, error) {
 **Risk:** Low
 
 **Files to Modify:**
+
 - `pkg/kafka/translator.go` - Add message pooling
 - `pkg/amqp/translator.go` - Add message pooling
 - `pkg/processor/processor.go` - Add buffer pooling
 - `pkg/types/message.go` - Add Reset() method
 
 **Testing:**
+
 ```bash
 go test -bench=BenchmarkObjectPooling -benchmem
 ```
@@ -75,6 +79,7 @@ go test -bench=BenchmarkObjectPooling -benchmem
 **Problem:** Topic strings allocated repeatedly
 
 **Solution:**
+
 ```go
 type StringInterner struct {
     mu     sync.RWMutex
@@ -88,7 +93,7 @@ func (si *StringInterner) Intern(s string) string {
         return cached
     }
     si.mu.RUnlock()
-    
+
     si.mu.Lock()
     si.cache[s] = s
     si.mu.Unlock()
@@ -105,6 +110,7 @@ msg.Topic = topicInterner.Intern(topic)
 **Risk:** Very Low
 
 **Files to Create:**
+
 - `pkg/common/string_interner.go`
 
 ---
@@ -114,6 +120,7 @@ msg.Topic = topicInterner.Intern(topic)
 **Problem:** Metadata map allocations
 
 **Solution:**
+
 ```go
 // In message pool
 New: func() interface{} {
@@ -129,7 +136,7 @@ func (m *PortaskMessage) Reset() {
     m.Topic = ""
     m.Payload = m.Payload[:0]
     m.Timestamp = 0
-    
+
     // Clear maps (don't recreate)
     for k := range m.Metadata {
         delete(m.Metadata, k)
@@ -148,6 +155,7 @@ func (m *PortaskMessage) Reset() {
 **Problem:** Payload copied multiple times
 
 **Solution:**
+
 ```go
 type ZeroCopyBuffer struct {
     data []byte
@@ -174,6 +182,7 @@ copy(msg.Payload, data) // Only once
 **Risk:** Medium (memory leaks possible)
 
 **Files to Create:**
+
 - `pkg/memory/zerocopy.go`
 
 ---
@@ -183,6 +192,7 @@ copy(msg.Payload, data) // Only once
 **Problem:** Intermediate buffer copies
 
 **Solution:**
+
 ```go
 // Instead of: copy(buffer, data)
 // Direct access
@@ -205,6 +215,7 @@ type DirectAccessMessage struct {
 **Problem:** Channel contention in parallel writer
 
 **Solution:**
+
 ```go
 import "github.com/golang-collections/go-datastructures/queue"
 
@@ -223,6 +234,7 @@ func (s *Shard) Enqueue(msg *types.PortaskMessage) error {
 **Risk:** Medium
 
 **Dependencies:**
+
 ```bash
 go get github.com/golang-collections/go-datastructures
 ```
@@ -234,6 +246,7 @@ go get github.com/golang-collections/go-datastructures
 **Problem:** Mutex-protected counters
 
 **Solution:**
+
 ```go
 // Replace
 mu.Lock()
@@ -256,6 +269,7 @@ atomic.AddInt64(&counter, 1)
 **Problem:** Network bandwidth bottleneck
 
 **Solution:**
+
 ```go
 type CompressedBatch struct {
     Original   []*types.PortaskMessage
@@ -275,6 +289,7 @@ func CompressBatch(batch []*types.PortaskMessage) []byte {
 **Risk:** Low
 
 **Files to Create:**
+
 - `pkg/processor/batch_compressor.go`
 
 ---
@@ -282,6 +297,7 @@ func CompressBatch(batch []*types.PortaskMessage) []byte {
 ### 4.2 Compression Level Tuning
 
 **Solution:**
+
 ```go
 // Fast compression for hot path
 lz4Config := lz4.CompressionLevel(1) // Fastest
@@ -301,6 +317,7 @@ compressed := snappy.Encode(nil, data)
 **Problem:** Context switching overhead
 
 **Solution:**
+
 ```go
 import "runtime"
 
@@ -308,7 +325,7 @@ func (s *Shard) Run() {
     // Pin to CPU core
     runtime.LockOSThread()
     defer runtime.UnlockOSThread()
-    
+
     // Worker loop
 }
 ```
@@ -323,6 +340,7 @@ func (s *Shard) Run() {
 **Problem:** Network latency
 
 **Solution:**
+
 ```go
 // Dragonfly connection tuning
 &redis.Options{
@@ -348,6 +366,7 @@ net.core.somaxconn = 4096
 **Problem:** Sequential batch writes
 
 **Solution:**
+
 ```go
 // Pipeline multiple batches
 pipeline := redis.Pipeline()
@@ -369,6 +388,7 @@ pipeline.Exec(ctx) // Single round-trip
 **Problem:** Slow serialization
 
 **Solution:**
+
 ```go
 import "github.com/klauspost/compress/s2"
 
@@ -386,6 +406,7 @@ compressed := s2.Encode(nil, data)
 **Problem:** Disk I/O bottleneck (if applicable)
 
 **Solution:**
+
 ```go
 import "golang.org/x/exp/mmap"
 
@@ -403,6 +424,7 @@ reader, _ := mmap.Open("messages.dat")
 **Problem:** JSON/MessagePack overhead
 
 **Solution:**
+
 ```go
 // Custom binary format
 func (m *PortaskMessage) MarshalBinary() []byte {
@@ -423,13 +445,16 @@ func (m *PortaskMessage) MarshalBinary() []byte {
 ## Implementation Roadmap
 
 ### Sprint 1 (Week 1-2): Low-Hanging Fruit
+
 **Target: 470K msgs/sec (+30%)**
+
 - [ ] Object pooling (sync.Pool)
 - [ ] String interning
 - [ ] Pre-allocate maps
 - [ ] Atomic counters
 
 **Deliverables:**
+
 - Object pool implementation
 - Benchmark comparison
 - Memory profiling
@@ -437,12 +462,15 @@ func (m *PortaskMessage) MarshalBinary() []byte {
 ---
 
 ### Sprint 2 (Week 3-4): Lock-Free Structures
+
 **Target: 560K msgs/sec (+19%)**
+
 - [ ] Lock-free queue
 - [ ] Zero-copy buffers (phase 1)
 - [ ] Goroutine pinning
 
 **Deliverables:**
+
 - Lock-free queue implementation
 - Performance comparison
 - CPU profiling
@@ -450,12 +478,15 @@ func (m *PortaskMessage) MarshalBinary() []byte {
 ---
 
 ### Sprint 3 (Week 5-6): Compression & Pipelining
+
 **Target: 700K msgs/sec (+25%)**
+
 - [ ] Batch compression
 - [ ] Batch pipelining
 - [ ] TCP tuning
 
 **Deliverables:**
+
 - Compression benchmarks
 - Network profiling
 - Latency analysis
@@ -463,12 +494,15 @@ func (m *PortaskMessage) MarshalBinary() []byte {
 ---
 
 ### Sprint 4 (Week 7-8): Advanced Optimizations
+
 **Target: 880K msgs/sec (+26%)**
+
 - [ ] Custom serialization
 - [ ] SIMD optimizations
 - [ ] Zero-copy (phase 2)
 
 **Deliverables:**
+
 - Custom serializer
 - Performance report
 - Production readiness
@@ -476,13 +510,16 @@ func (m *PortaskMessage) MarshalBinary() []byte {
 ---
 
 ### Sprint 5 (Week 9-10): Final Push to 1M
+
 **Target: 1M+ msgs/sec (+14%)**
+
 - [ ] Fine-tuning all optimizations
 - [ ] Profile-guided optimization (PGO)
 - [ ] Hardware-specific tuning
 - [ ] Load testing at scale
 
 **Deliverables:**
+
 - 1M msgs/sec achieved
 - Comprehensive benchmarks
 - Production deployment guide
@@ -526,21 +563,21 @@ type PerformanceMetrics struct {
     // Throughput
     MessagesPerSecond float64
     BytesPerSecond    float64
-    
+
     // Latency
     P50Latency time.Duration
     P95Latency time.Duration
     P99Latency time.Duration
-    
+
     // Resource Usage
     CPUUsage      float64
     MemoryUsage   int64
     GoroutineCount int
-    
+
     // Allocations
     AllocPerMessage int64
     MallocPerMessage int64
-    
+
     // GC
     GCPauseTime time.Duration
     GCFrequency float64
@@ -567,16 +604,16 @@ Total:    1M msgs/sec (2.76x improvement)
 ## Risk Mitigation
 
 ### High-Risk Items
+
 1. **Zero-copy optimizations** - Can cause memory leaks
    - Mitigation: Extensive testing, reference counting
-   
 2. **Lock-free queues** - Complex implementation
    - Mitigation: Use well-tested libraries
-   
 3. **Unsafe operations** - Potential crashes
    - Mitigation: Comprehensive unit tests
 
 ### Testing Strategy
+
 - Unit tests for each optimization
 - Integration tests with full stack
 - Load tests at each milestone
@@ -588,16 +625,19 @@ Total:    1M msgs/sec (2.76x improvement)
 ## Success Criteria
 
 ### Performance
+
 - ✅ 1M msgs/sec sustained throughput
 - ✅ < 10 μs p99 latency
 - ✅ < 5 μs p50 latency
 
 ### Resource Usage
+
 - ✅ < 50% CPU at 1M msgs/sec
 - ✅ < 2GB memory usage
 - ✅ < 100 goroutines
 
 ### Stability
+
 - ✅ 24h stress test passed
 - ✅ No memory leaks
 - ✅ No race conditions
@@ -608,6 +648,7 @@ Total:    1M msgs/sec (2.76x improvement)
 ## Monitoring & Observability
 
 ### Metrics to Monitor
+
 ```go
 prometheus.NewGaugeVec(prometheus.GaugeOpts{
     Name: "portask_throughput_msgs_per_sec",
@@ -624,6 +665,7 @@ prometheus.NewCounterVec(prometheus.CounterOpts{
 ```
 
 ### Alerts
+
 - Throughput drops below 900K msgs/sec
 - P99 latency > 20 μs
 - Memory usage > 3GB
@@ -635,19 +677,23 @@ prometheus.NewCounterVec(prometheus.CounterOpts{
 ## References & Resources
 
 ### Go Performance
+
 - [Go Performance Book](https://github.com/dgryski/go-perfbook)
 - [High Performance Go Workshop](https://dave.cheney.net/high-performance-go-workshop/gopherchina-2019.html)
 - [Profiling Go Programs](https://go.dev/blog/pprof)
 
 ### Lock-Free Programming
+
 - [Lock-Free Data Structures](https://preshing.com/20120612/an-introduction-to-lock-free-programming/)
 - [Go-Datastructures](https://github.com/golang-collections/go-datastructures)
 
 ### Compression
+
 - [Compression Benchmarks](https://github.com/klauspost/compress)
 - [LZ4 vs Snappy](https://github.com/google/snappy/tree/main/docs)
 
 ### Zero-Copy
+
 - [Zero-Copy in Go](https://blog.gopheracademy.com/advent-2017/go-zero-copy/)
 - [Memory Management](https://go101.org/article/memory-block.html)
 
@@ -656,12 +702,14 @@ prometheus.NewCounterVec(prometheus.CounterOpts{
 ## Conclusion
 
 **Path to 1M ops/sec is achievable through:**
+
 1. 📊 Systematic profiling
 2. 🎯 Targeted optimizations
 3. 🧪 Rigorous testing
 4. 📈 Incremental improvements
 
 **Key Success Factors:**
+
 - Profile before optimizing
 - Measure after every change
 - Don't guess, measure!
@@ -674,7 +722,6 @@ prometheus.NewCounterVec(prometheus.CounterOpts{
 
 ---
 
-*Last Updated: 2024*  
-*Status: Ready for implementation*  
-*Priority: High*
-
+_Last Updated: 2024_  
+_Status: Ready for implementation_  
+_Priority: High_
