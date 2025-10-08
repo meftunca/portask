@@ -120,7 +120,7 @@ func (abw *AsyncBatchWriter) Write(msg *types.PortaskMessage) error {
 	}
 
 	shardID := abw.getShardID(msg)
-	
+
 	// Try non-blocking write
 	select {
 	case abw.shards[shardID].input <- msg:
@@ -129,7 +129,7 @@ func (abw *AsyncBatchWriter) Write(msg *types.PortaskMessage) error {
 	default:
 		// Queue full, increment error but don't block
 		abw.metrics.QueueFullErrors.Add(1)
-		
+
 		// Block as last resort (backpressure)
 		abw.shards[shardID].input <- msg
 		return nil
@@ -175,16 +175,16 @@ func (abw *AsyncBatchWriter) processConfirmations(ctx context.Context) {
 
 // asyncBatchShard handles async batch writing for a single shard
 type asyncBatchShard struct {
-	id            int
-	config        *ParallelBatchWriterConfig
-	storage       StorageBackend
-	input         chan *types.PortaskMessage
-	currentBatch  []*types.PortaskMessage // Simple slice instead of MessageBatch
-	flushTimer    *time.Timer
-	stopChan      chan struct{}
-	metrics       *AsyncBatchMetrics
-	confirmChan   chan *batchConfirmation
-	batchIDGen    atomic.Uint64
+	id           int
+	config       *ParallelBatchWriterConfig
+	storage      StorageBackend
+	input        chan *types.PortaskMessage
+	currentBatch []*types.PortaskMessage // Simple slice instead of MessageBatch
+	flushTimer   *time.Timer
+	stopChan     chan struct{}
+	metrics      *AsyncBatchMetrics
+	confirmChan  chan *batchConfirmation
+	batchIDGen   atomic.Uint64
 }
 
 // newAsyncBatchShard creates a new async batch shard
@@ -249,16 +249,16 @@ func (as *asyncBatchShard) flushAsync(ctx context.Context) {
 	go func(messages []*types.PortaskMessage, id uint64, size int) {
 		start := time.Now()
 		batch := types.NewMessageBatch(messages)
-		
+
 		var err error
-		
+
 		// Use parallel batch writes if enabled and supported
 		if as.config.EnableParallelWrites && as.config.SubBatchSize > 0 {
 			// Try to use parallel batch write (Dragonfly store interface)
 			type ParallelBatchStore interface {
 				StoreBatchParallel(ctx context.Context, batch *types.MessageBatch, subBatchSize int) error
 			}
-			
+
 			if parallelStore, ok := as.storage.(ParallelBatchStore); ok {
 				// Use parallel batch write for +92% throughput!
 				err = parallelStore.StoreBatchParallel(ctx, batch, as.config.SubBatchSize)
@@ -270,7 +270,7 @@ func (as *asyncBatchShard) flushAsync(ctx context.Context) {
 			// Regular batch write
 			err = as.storage.StoreBatch(ctx, batch)
 		}
-		
+
 		duration := time.Since(start)
 
 		// Send confirmation
@@ -307,4 +307,3 @@ func (as *asyncBatchShard) resetFlushTimer() {
 func (abw *AsyncBatchWriter) GetMetrics() *AsyncBatchMetrics {
 	return abw.metrics
 }
-

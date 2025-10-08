@@ -24,12 +24,12 @@ type ParallelBatchWriter struct {
 
 // ParallelBatchWriterConfig configures parallel batch writer
 type ParallelBatchWriterConfig struct {
-	NumShards     int           // Number of parallel writers (e.g., 8)
-	FlushInterval time.Duration // Flush interval per shard (e.g., 10ms)
-	BatchSize     int           // Batch size per shard (e.g., 1000)
-	MaxRetries    int           // Max retries
-	SubBatchSize  int           // Sub-batch size for parallel writes (0 = disabled, default: 200)
-	EnableParallelWrites bool   // Enable parallel batch writes (default: true for Dragonfly)
+	NumShards            int           // Number of parallel writers (e.g., 8)
+	FlushInterval        time.Duration // Flush interval per shard (e.g., 10ms)
+	BatchSize            int           // Batch size per shard (e.g., 1000)
+	MaxRetries           int           // Max retries
+	SubBatchSize         int           // Sub-batch size for parallel writes (0 = disabled, default: 200)
+	EnableParallelWrites bool          // Enable parallel batch writes (default: true for Dragonfly)
 }
 
 // batchShard represents a single batch writer shard
@@ -61,7 +61,7 @@ func HighThroughputConfig() *ParallelBatchWriterConfig {
 	return &ParallelBatchWriterConfig{
 		NumShards:            32,
 		FlushInterval:        10 * time.Millisecond, // Optimal (5ms = too aggressive, causes 65% drop!)
-		BatchSize:            500,                   // Phase 8: Optimized from 100 to 500 (+11% throughput)
+		BatchSize:            5000,                  // Optimal: 5000 msgs = 25 goroutines (+6% vs 500!)
 		MaxRetries:           3,
 		SubBatchSize:         200,  // Parallel write sub-batch size (optimal: 100-200)
 		EnableParallelWrites: true, // Enable parallel batch writes for +92% throughput!
