@@ -21,6 +21,7 @@ import {
   Send,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { MessageDetailDialog } from "@/components/MessageDetailDialog";
 
 interface Message {
   id: string;
@@ -44,6 +45,8 @@ const Messages: React.FC = () => {
   const [publishing, setPublishing] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
   const fetchMessages = async (topicOverride?: string) => {
     setLoading(true);
@@ -304,7 +307,15 @@ const Messages: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedMessage(message);
+                              setDetailDialogOpen(true);
+                            }}
+                            title="View Details"
+                          >
                             <Eye className="h-4 w-4" />
                           </Button>
                         </div>
@@ -367,6 +378,13 @@ const Messages: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Message Detail Dialog */}
+      <MessageDetailDialog
+        message={selectedMessage}
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+      />
     </div>
   );
 };
