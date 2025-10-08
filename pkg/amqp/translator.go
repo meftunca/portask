@@ -2,8 +2,10 @@ package amqp
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/meftunca/portask/pkg/common"
 	"github.com/meftunca/portask/pkg/memory"
 	"github.com/meftunca/portask/pkg/types"
 )
@@ -27,25 +29,27 @@ func (t *AMQPTranslator) TranslatePublish(
 	body []byte,
 	properties *MessageProperties,
 ) (*types.PortaskMessage, error) {
-	
+
 	if routingKey == "" {
 		return nil, fmt.Errorf("routing key cannot be empty")
 	}
-	
+
 	// Get message from pool
 	msg := memory.GetMessage()
 	
 	// Use routing key as topic
 	topic := routingKey
 	if exchange != "" {
-		topic = fmt.Sprintf("%s.%s", exchange, routingKey)
+		topic = exchange + "." + routingKey // String concat instead of fmt.Sprintf
 	}
 	
-	// Set fields
-	msg.ID = types.MessageID(fmt.Sprintf("amqp-%d", time.Now().UnixNano()))
-	msg.Topic = types.TopicName(memory.InternTopic(topic)) // Intern topic string
-	msg.Partition = 0 // AMQP doesn't have partitions
+	// Generate ID without allocation
+	msgID := common.NextAMQPID()
+	msg.ID = types.MessageID(strconv.FormatUint(msgID, 10))
 	
+	msg.Topic = types.TopicName(memory.InternTopic(topic)) // Intern topic string
+	msg.Partition = 0                                      // AMQP doesn't have partitions
+
 	// Reuse payload buffer
 	if cap(msg.Payload) >= len(body) {
 		msg.Payload = msg.Payload[:len(body)]
@@ -53,16 +57,16 @@ func (t *AMQPTranslator) TranslatePublish(
 	} else {
 		msg.Payload = append(msg.Payload[:0], body...)
 	}
-	
+
 	msg.Timestamp = time.Now().UnixNano()
 	msg.TTL = 0 // Use default from config
-	
+
 	// Reuse metadata map
 	msg.Metadata["source"] = "amqp"
 	msg.Metadata["protocol"] = "amqp-0.9.1"
 	msg.Metadata["exchange"] = exchange
 	msg.Metadata["routing_key"] = routingKey
-	
+
 	// Add AMQP properties to metadata
 	if properties != nil {
 		if properties.ContentType != "" {
@@ -93,7 +97,7 @@ func (t *AMQPTranslator) TranslatePublish(
 			msg.Metadata["delivery_mode"] = fmt.Sprintf("%d", properties.DeliveryMode)
 		}
 	}
-	
+
 	return msg, nil
 }
 
@@ -106,15 +110,15 @@ func (t *AMQPTranslator) TranslateConsume(
 	noLocal bool,
 	noWait bool,
 ) (*types.FetchRequest, error) {
-	
+
 	if queue == "" {
 		return nil, fmt.Errorf("queue name cannot be empty")
 	}
-	
+
 	return &types.FetchRequest{
 		Topic:     types.TopicName(queue),
-		Partition: 0, // AMQP doesn't have partitions
-		Offset:    0, // Start from beginning
+		Partition: 0,   // AMQP doesn't have partitions
+		Offset:    0,   // Start from beginning
 		Limit:     100, // Default batch size
 	}, nil
 }
@@ -124,14 +128,14 @@ func (t *AMQPTranslator) TranslatePublishResponse(
 	offset int64,
 	err error,
 ) *AMQPPublishResponse {
-	
+
 	if err != nil {
 		return &AMQPPublishResponse{
 			Success: false,
 			Error:   err.Error(),
 		}
 	}
-	
+
 	return &AMQPPublishResponse{
 		Success: true,
 		Offset:  offset,
@@ -144,32 +148,32 @@ func (t *AMQPTranslator) TranslateConsumeResponse(
 	consumerTag string,
 	err error,
 ) ([]*AMQPDeliver, error) {
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Convert Portask messages to AMQP Deliver messages
 	delivers := make([]*AMQPDeliver, 0, len(messages))
 	for i, msg := range messages {
 		delivers = append(delivers, &AMQPDeliver{
-			ConsumerTag:  consumerTag,
-			DeliveryTag:  uint64(i + 1),
-			Redelivered:  false,
-			Exchange:     msg.Metadata["exchange"],
-			RoutingKey:   msg.Metadata["routing_key"],
-			Body:         msg.Payload,
-			Properties:   t.extractProperties(msg),
+			ConsumerTag: consumerTag,
+			DeliveryTag: uint64(i + 1),
+			Redelivered: false,
+			Exchange:    msg.Metadata["exchange"],
+			RoutingKey:  msg.Metadata["routing_key"],
+			Body:        msg.Payload,
+			Properties:  t.extractProperties(msg),
 		})
 	}
-	
+
 	return delivers, nil
 }
 
 // extractProperties extracts AMQP properties from Portask message metadata
 func (t *AMQPTranslator) extractProperties(msg *types.PortaskMessage) *MessageProperties {
 	props := &MessageProperties{}
-	
+
 	if msg.Metadata != nil {
 		props.ContentType = msg.Metadata["content_type"]
 		props.ContentEncoding = msg.Metadata["content_encoding"]
@@ -178,7 +182,7 @@ func (t *AMQPTranslator) extractProperties(msg *types.PortaskMessage) *MessagePr
 		props.MessageID = msg.Metadata["message_id"]
 		props.AppID = msg.Metadata["app_id"]
 		props.UserID = msg.Metadata["user_id"]
-		
+
 		// Parse numeric values
 		if priority, ok := msg.Metadata["priority"]; ok {
 			fmt.Sscanf(priority, "%d", &props.Priority)
@@ -187,7 +191,7 @@ func (t *AMQPTranslator) extractProperties(msg *types.PortaskMessage) *MessagePr
 			fmt.Sscanf(deliveryMode, "%d", &props.DeliveryMode)
 		}
 	}
-	
+
 	return props
 }
 
@@ -196,8 +200,8 @@ type MessageProperties struct {
 	ContentType     string
 	ContentEncoding string
 	Headers         map[string]interface{}
-	DeliveryMode    uint8  // 1 = non-persistent, 2 = persistent
-	Priority        uint8  // 0-9
+	DeliveryMode    uint8 // 1 = non-persistent, 2 = persistent
+	Priority        uint8 // 0-9
 	CorrelationID   string
 	ReplyTo         string
 	Expiration      string
@@ -226,4 +230,3 @@ type AMQPDeliver struct {
 	Body        []byte
 	Properties  *MessageProperties
 }
-

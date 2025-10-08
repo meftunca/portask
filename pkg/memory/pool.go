@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
-	
+
 	"github.com/meftunca/portask/pkg/types"
 )
 
@@ -864,7 +864,7 @@ for _, event := range customPool.GetEvents() {
 var portaskMessagePool = sync.Pool{
 	New: func() interface{} {
 		return &types.PortaskMessage{
-			Metadata: make(map[string]string, 8),  // Pre-allocate for common case
+			Metadata: make(map[string]string, 8),    // Pre-allocate for common case
 			Headers:  make(types.MessageHeaders, 4), // Pre-allocate
 		}
 	},
@@ -904,16 +904,16 @@ func InternTopic(topic string) string {
 		return cached
 	}
 	globalTopicInterner.mu.RUnlock()
-	
+
 	// Slow path: write lock
 	globalTopicInterner.mu.Lock()
 	defer globalTopicInterner.mu.Unlock()
-	
+
 	// Double-check after acquiring write lock
 	if cached, ok := globalTopicInterner.cache[topic]; ok {
 		return cached
 	}
-	
+
 	// Store and return
 	globalTopicInterner.cache[topic] = topic
 	return topic

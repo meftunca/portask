@@ -130,7 +130,7 @@ func (m *PortaskMessage) Reset() {
 	m.Topic = ""
 	m.Payload = m.Payload[:0] // Keep capacity
 	m.Timestamp = 0
-	
+
 	// Clear maps without recreating them
 	for k := range m.Headers {
 		delete(m.Headers, k)
@@ -138,7 +138,7 @@ func (m *PortaskMessage) Reset() {
 	for k := range m.Metadata {
 		delete(m.Metadata, k)
 	}
-	
+
 	// Reset optional fields
 	m.Priority = PriorityNormal
 	m.Status = StatusPending
@@ -146,18 +146,18 @@ func (m *PortaskMessage) Reset() {
 	m.Key = ""
 	m.PartitionKey = ""
 	m.ReplyTo = ""
-	
+
 	// Reset expiration
 	m.ExpiresAt = 0
 	m.TTL = 0
 	m.Offset = 0
 	m.Attempts = 0
 	m.MaxRetry = 0
-	
+
 	// Reset tracking
 	m.CorrelationID = ""
 	m.TraceID = ""
-	
+
 	// Reset internal fields
 	m._internal.ReceivedAt = time.Time{}
 	m._internal.ProcessedAt = time.Time{}

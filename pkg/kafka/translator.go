@@ -2,8 +2,10 @@ package kafka
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/meftunca/portask/pkg/common"
 	"github.com/meftunca/portask/pkg/memory"
 	"github.com/meftunca/portask/pkg/types"
 )
@@ -20,7 +22,7 @@ func NewKafkaTranslator() *KafkaTranslator {
 }
 
 // TranslateProduce converts Kafka Produce request to Portask message
-// Uses object pooling to reduce allocations
+// Optimized to minimize allocations
 func (t *KafkaTranslator) TranslateProduce(
 	topic string,
 	partition int32,
@@ -32,14 +34,23 @@ func (t *KafkaTranslator) TranslateProduce(
 		return nil, fmt.Errorf("topic cannot be empty")
 	}
 
-	// Get message from pool instead of allocating
+	// Get message from pool
 	msg := memory.GetMessage()
 	
-	// Set fields
-	msg.ID = types.MessageID(fmt.Sprintf("kafka-%d", time.Now().UnixNano()))
-	msg.Topic = types.TopicName(memory.InternTopic(topic)) // Intern topic string
+	// Generate ID without allocation (no fmt.Sprintf!)
+	msgID := common.NextKafkaID()
+	msg.ID = types.MessageID(strconv.FormatUint(msgID, 10))
+	
+	// Intern topic to reuse string
+	msg.Topic = types.TopicName(memory.InternTopic(topic))
 	msg.Partition = partition
-	msg.Key = string(key)
+	
+	// Keep key as string (required by type)
+	if len(key) > 0 {
+		msg.Key = string(key) // Unavoidable allocation
+	} else {
+		msg.Key = ""
+	}
 	
 	// Reuse payload buffer if possible
 	if cap(msg.Payload) >= len(value) {
@@ -52,7 +63,7 @@ func (t *KafkaTranslator) TranslateProduce(
 	msg.Timestamp = time.Now().UnixNano()
 	msg.TTL = 0 // Use default from config
 	
-	// Reuse metadata map (already pre-allocated in pool)
+	// Reuse metadata map from pool (already cleared in Reset)
 	msg.Metadata["source"] = "kafka"
 	msg.Metadata["protocol"] = "kafka-wire"
 	msg.Metadata["version"] = "2.0"
