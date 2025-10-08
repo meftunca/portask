@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Activity, Database, MessageSquare, Network, Server, Users } from 'lucide-react'
 import { api, apiBase } from '@/lib/api'
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface SystemMetrics {
   uptime: string
@@ -11,6 +12,9 @@ interface SystemMetrics {
   memory_usage: string
   cpu_usage: string
   status: string
+  goroutines?: number
+  gc_count?: number
+  messages_rate?: number
 }
 
 export default function Dashboard() {
@@ -24,6 +28,8 @@ export default function Dashboard() {
   })
 
   const [isConnected, setIsConnected] = useState(false)
+  const [throughputData, setThroughputData] = useState<Array<{time: string, messages: number, latency: number}>>([])
+  const [memoryData, setMemoryData] = useState<Array<{time: string, alloc: number, sys: number}>>([])
 
   useEffect(() => {
     // Gerçek API'den veri çek
@@ -31,15 +37,44 @@ export default function Dashboard() {
       try {
         const response = await apiBase.get('/metrics',)
         const data = response.data
-        setMetrics({
+        
+        const newMetrics = {
           uptime: data.core?.uptime_seconds ? `${Math.round(data.core.uptime_seconds)}s` : '0s',
           connections: data.network?.connections_active || 0,
           messages_total: data.storage?.total_messages || 0,
           memory_usage: `${data.system?.alloc_mb || 0} MB`,
-          cpu_usage: '0%', // CPU usage would come from system metrics
-          status: 'healthy'
-        })
+          cpu_usage: '0%',
+          status: 'healthy',
+          goroutines: data.system?.num_goroutines || 0,
+          gc_count: data.system?.num_gc || 0,
+          messages_rate: data.network?.messages_received || 0
+        }
+        setMetrics(newMetrics)
         setIsConnected(true)
+
+        // Update chart data
+        const now = new Date().toLocaleTimeString()
+        
+        // Throughput chart data
+        setThroughputData(prev => {
+          const newData = [...prev, {
+            time: now,
+            messages: data.storage?.total_messages || 0,
+            latency: data.core?.avg_latency_ms || 0
+          }]
+          return newData.slice(-20) // Keep last 20 points
+        })
+
+        // Memory chart data
+        setMemoryData(prev => {
+          const newData = [...prev, {
+            time: now,
+            alloc: data.system?.alloc_mb || 0,
+            sys: data.system?.sys_mb || 0
+          }]
+          return newData.slice(-20) // Keep last 20 points
+        })
+        
       } catch (error) {
         setIsConnected(false)
         setMetrics((m) => ({ ...m, status: 'disconnected' }))
@@ -92,6 +127,27 @@ export default function Dashboard() {
       description: 'API connection status',
       icon: Network,
       color: isConnected ? 'text-green-600' : 'text-red-600'
+    },
+    {
+      title: 'Goroutines',
+      value: metrics.goroutines?.toString() || '0',
+      description: 'Active goroutines',
+      icon: Activity,
+      color: 'text-cyan-600'
+    },
+    {
+      title: 'GC Cycles',
+      value: metrics.gc_count?.toString() || '0',
+      description: 'Garbage collection count',
+      icon: Database,
+      color: 'text-amber-600'
+    },
+    {
+      title: 'Messages/Sec',
+      value: metrics.messages_rate?.toString() || '0',
+      description: 'Message throughput',
+      icon: MessageSquare,
+      color: 'text-indigo-600'
     }
   ]
 
@@ -106,7 +162,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {cards.map((card, index) => {
           const Icon = card.icon
           return (
@@ -142,13 +198,42 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Message Throughput</span>
-                <span className="text-sm text-muted-foreground">Real-time</span>
+                <span className="text-sm text-muted-foreground">Last 20 updates</span>
               </div>
-              <div className="h-32 bg-muted rounded-md flex items-center justify-center">
-                <span className="text-muted-foreground text-sm">
-                  📊 Chart Component Here
-                </span>
-              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={throughputData}>
+                  <defs>
+                    <linearGradient id="colorMessages" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis 
+                    dataKey="time" 
+                    className="text-xs"
+                    tick={{ fill: 'currentColor' }}
+                  />
+                  <YAxis 
+                    className="text-xs"
+                    tick={{ fill: 'currentColor' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))' 
+                    }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="messages" 
+                    stroke="#8884d8" 
+                    fillOpacity={1} 
+                    fill="url(#colorMessages)"
+                    name="Total Messages"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
@@ -184,6 +269,103 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Memory & Performance Charts */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Memory Usage</CardTitle>
+            <CardDescription>
+              Alloc vs System memory over time
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={memoryData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis 
+                  dataKey="time" 
+                  className="text-xs"
+                  tick={{ fill: 'currentColor' }}
+                />
+                <YAxis 
+                  className="text-xs"
+                  tick={{ fill: 'currentColor' }}
+                  label={{ value: 'MB', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))' 
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="alloc" 
+                  stroke="#8884d8" 
+                  strokeWidth={2}
+                  name="Allocated"
+                  dot={false}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="sys" 
+                  stroke="#82ca9d" 
+                  strokeWidth={2}
+                  name="System"
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Average Latency</CardTitle>
+            <CardDescription>
+              Response time in milliseconds
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={throughputData}>
+                <defs>
+                  <linearGradient id="colorLatency" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis 
+                  dataKey="time" 
+                  className="text-xs"
+                  tick={{ fill: 'currentColor' }}
+                />
+                <YAxis 
+                  className="text-xs"
+                  tick={{ fill: 'currentColor' }}
+                  label={{ value: 'ms', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))' 
+                  }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="latency" 
+                  stroke="#fbbf24" 
+                  fillOpacity={1} 
+                  fill="url(#colorLatency)"
+                  name="Latency (ms)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
