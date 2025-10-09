@@ -158,7 +158,7 @@ func (s *FiberServer) handleCreateConsumerGroup(c *fiber.Ctx) error {
 		CreatedAt:     time.Now().Format(time.RFC3339),
 		UpdatedAt:     time.Now().Format(time.RFC3339),
 	}
-	
+
 	// Store in memory (in-memory coordinator)
 	s.groupsMutex.Lock()
 	s.consumerGroups[req.Name] = &group
@@ -208,7 +208,7 @@ func (s *FiberServer) handleGetConsumerGroup(c *fiber.Ctx) error {
 	s.groupsMutex.RLock()
 	group, exists := s.consumerGroups[groupID]
 	s.groupsMutex.RUnlock()
-	
+
 	if !exists {
 		return c.Status(404).JSON(fiber.Map{
 			"success": false,
@@ -240,7 +240,7 @@ func (s *FiberServer) handleDeleteConsumerGroup(c *fiber.Ctx) error {
 	s.groupsMutex.Lock()
 	delete(s.consumerGroups, groupID)
 	s.groupsMutex.Unlock()
-	
+
 	log.Printf("[Native API] Deleted consumer group: %s", groupID)
 
 	return c.JSON(fiber.Map{
@@ -272,7 +272,7 @@ func (s *FiberServer) handleUpdateConsumerGroup(c *fiber.Ctx) error {
 		group.UpdatedAt = time.Now().Format(time.RFC3339)
 	}
 	s.groupsMutex.Unlock()
-	
+
 	log.Printf("[Native API] Updated consumer group %s topics: %v", groupID, req.Topics)
 
 	return c.JSON(fiber.Map{
@@ -327,7 +327,7 @@ func (s *FiberServer) handleJoinConsumerGroup(c *fiber.Ctx) error {
 			"error":   fmt.Sprintf("Consumer group '%s' not found", groupID),
 		})
 	}
-	
+
 	// Add member
 	member := NativeGroupMember{
 		ID:             memberID,
@@ -342,7 +342,7 @@ func (s *FiberServer) handleJoinConsumerGroup(c *fiber.Ctx) error {
 	group.Generation++
 	group.UpdatedAt = time.Now().Format(time.RFC3339)
 	s.groupsMutex.Unlock()
-	
+
 	response := JoinGroupResponse{
 		MemberID:   memberID,
 		Generation: int32(group.Generation), // int -> int32
@@ -395,7 +395,7 @@ func (s *FiberServer) handleLeaveConsumerGroup(c *fiber.Ctx) error {
 		group.UpdatedAt = time.Now().Format(time.RFC3339)
 	}
 	s.groupsMutex.Unlock()
-	
+
 	log.Printf("[Native API] Member %s left group %s", req.MemberID, groupID)
 
 	return c.JSON(fiber.Map{
@@ -437,7 +437,7 @@ func (s *FiberServer) handleHeartbeat(c *fiber.Ctx) error {
 		}
 	}
 	s.groupsMutex.Unlock()
-	
+
 	log.Printf("[Native API] Heartbeat from member %s in group %s (gen: %d)", req.MemberID, groupID, req.Generation)
 
 	return c.JSON(fiber.Map{
@@ -645,19 +645,19 @@ func (s *FiberServer) handleGetGroupLag(c *fiber.Ctx) error {
 
 	lags := []GroupLagInfo{}
 	totalLag := int64(0)
-	
+
 	for _, offset := range consumerOffsets {
 		// Get latest offset for this topic/partition
 		latestOffset, err := s.storage.GetLatestOffset(ctx, offset.Topic, offset.Partition)
 		if err != nil {
 			continue
 		}
-		
+
 		lag := latestOffset - offset.Offset
 		if lag < 0 {
 			lag = 0
 		}
-		
+
 		lags = append(lags, GroupLagInfo{
 			Topic:         string(offset.Topic),
 			Partition:     offset.Partition,
@@ -665,7 +665,7 @@ func (s *FiberServer) handleGetGroupLag(c *fiber.Ctx) error {
 			LogEndOffset:  latestOffset,
 			Lag:           lag,
 		})
-		
+
 		totalLag += lag
 	}
 
@@ -690,7 +690,7 @@ func (s *FiberServer) handleListGroupMembers(c *fiber.Ctx) error {
 	s.groupsMutex.RLock()
 	group, exists := s.consumerGroups[groupID]
 	s.groupsMutex.RUnlock()
-	
+
 	if !exists {
 		return c.Status(404).JSON(fiber.Map{
 			"success": false,
@@ -716,19 +716,19 @@ func (s *FiberServer) handleGetGroupState(c *fiber.Ctx) error {
 	s.groupsMutex.RLock()
 	group, exists := s.consumerGroups[groupID]
 	s.groupsMutex.RUnlock()
-	
+
 	if !exists {
 		return c.Status(404).JSON(fiber.Map{
 			"success": false,
 			"error":   fmt.Sprintf("Consumer group '%s' not found", groupID),
 		})
 	}
-	
+
 	leader := ""
 	if len(group.Members) > 0 {
 		leader = group.Members[0].ID
 	}
-	
+
 	state := fiber.Map{
 		"group_id":   groupID,
 		"state":      group.State,

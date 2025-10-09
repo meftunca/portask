@@ -69,11 +69,11 @@ export default function AMQPDashboard() {
       // Fetch queues from backend
       const queuesRes = await apiBase.get('/api/v1/amqp/queues')
       const queuesList = queuesRes.data?.queues || []
-      
+
       // Fetch exchanges
       const exchangesRes = await apiBase.get('/api/v1/amqp/exchanges')
       const exchangesList = exchangesRes.data?.exchanges || []
-      
+
       // Fetch bindings
       const bindingsRes = await apiBase.get('/api/v1/amqp/bindings')
       const bindingsList = bindingsRes.data?.bindings || []

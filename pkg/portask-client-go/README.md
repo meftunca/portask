@@ -28,7 +28,7 @@ package main
 import (
     "context"
     "log"
-    
+
     portask "github.com/meftunca/portask/pkg/portask-client-go"
 )
 
@@ -38,13 +38,13 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Check health
     health, err := client.Health(context.Background())
     if err != nil {
         log.Fatal(err)
     }
-    
+
     log.Printf("Connected to Portask %s", health.Version)
 }
 ```
@@ -107,7 +107,7 @@ if err != nil {
 
 for _, msg := range messages {
     log.Printf("Received: %s - %v", msg.MessageID, msg.Value)
-    
+
     // Acknowledge message
     err = client.Consumer().Acknowledge(ctx, msg.MessageID, "")
     if err != nil {
@@ -305,7 +305,7 @@ Unlike Kafka or RabbitMQ client libraries, Portask provides:
 ✅ **Protocol-Agnostic**: Same API works for Kafka, AMQP, or native clients  
 ✅ **Modern API**: RESTful HTTP/JSON + WebSocket  
 ✅ **Simple & Fast**: No complex protocols, no heavyweight dependencies  
-✅ **Built-in Features**: Transactions, batching, consumer groups, lag monitoring  
+✅ **Built-in Features**: Transactions, batching, consumer groups, lag monitoring
 
 ## 📚 Examples
 
@@ -328,4 +328,3 @@ Contributions are welcome! Please open an issue or submit a PR.
 
 - GitHub Issues: https://github.com/meftunca/portask/issues
 - Documentation: https://github.com/meftunca/portask/tree/main/docs
-

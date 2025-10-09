@@ -296,16 +296,16 @@ func (s *FiberServer) handleBatchPublishAsync(c *fiber.Ctx) error {
 	go func() {
 		ctx := context.Background()
 		batch := make([]*types.PortaskMessage, 0, len(req.Messages))
-		
+
 		for _, msg := range req.Messages {
 			messageID := types.MessageID(fmt.Sprintf("msg-%d-%d", time.Now().UnixNano(), time.Now().Nanosecond()))
-			
+
 			payload, _ := json.Marshal(msg.Value)
 			metadata := make(map[string]string)
 			for k, v := range msg.Headers {
 				metadata[k] = fmt.Sprintf("%v", v)
 			}
-			
+
 			portaskMsg := &types.PortaskMessage{
 				ID:        messageID,
 				Topic:     types.TopicName(msg.Topic),
@@ -318,7 +318,7 @@ func (s *FiberServer) handleBatchPublishAsync(c *fiber.Ctx) error {
 			}
 			batch = append(batch, portaskMsg)
 		}
-		
+
 		// Store batch
 		if len(batch) > 0 {
 			messageBatch := &types.MessageBatch{
@@ -326,7 +326,7 @@ func (s *FiberServer) handleBatchPublishAsync(c *fiber.Ctx) error {
 				BatchID:   fmt.Sprintf("async-batch-%d", time.Now().UnixNano()),
 				CreatedAt: time.Now().Unix(),
 			}
-			
+
 			if err := s.storage.StoreBatch(ctx, messageBatch); err != nil {
 				log.Printf("[Native API] Async batch failed: %v", err)
 			} else {
@@ -453,19 +453,19 @@ func (s *FiberServer) handleBatchFetchPoll(c *fiber.Ctx) error {
 			"error":   "Invalid request body: " + err.Error(),
 		})
 	}
-	
+
 	// Long-polling: Wait up to timeout for messages (default 30s)
 	timeout := 30 * time.Second // Default 30s
-	
+
 	// Check for timeout query parameter (in seconds)
 	if timeoutSecs := c.QueryInt("timeout", 0); timeoutSecs > 0 {
 		timeout = time.Duration(timeoutSecs) * time.Second
 	}
-	
+
 	pollInterval := 100 * time.Millisecond
 	deadline := time.Now().Add(timeout)
 	ctx := c.Context()
-	
+
 	// Poll until messages found or timeout
 	for time.Now().Before(deadline) {
 		// Try to fetch messages
@@ -482,12 +482,12 @@ func (s *FiberServer) handleBatchFetchPoll(c *fiber.Ctx) error {
 				break
 			}
 		}
-		
+
 		// If messages found, return them
 		if hasMessages {
 			return s.handleBatchFetch(c)
 		}
-		
+
 		// Wait before next poll
 		select {
 		case <-ctx.Done():
@@ -500,7 +500,7 @@ func (s *FiberServer) handleBatchFetchPoll(c *fiber.Ctx) error {
 			// Continue polling
 		}
 	}
-	
+
 	// Timeout reached, return empty result
 	return c.JSON(fiber.Map{
 		"success": true,

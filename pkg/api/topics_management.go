@@ -222,7 +222,7 @@ func (s *FiberServer) handleListTopics(c *fiber.Ctx) error {
 	topics := make([]Topic, 0, len(topicInfos))
 	for _, info := range topicInfos {
 		topic := fromTopicInfo(info)
-		
+
 		// Calculate MessageCount and TotalBytes from storage
 		var messageCount int64
 		var totalBytes int64
@@ -235,7 +235,7 @@ func (s *FiberServer) handleListTopics(c *fiber.Ctx) error {
 		}
 		topic.MessageCount = messageCount
 		topic.TotalBytes = totalBytes
-		
+
 		topics = append(topics, *topic)
 
 		// Update cache
@@ -289,7 +289,7 @@ func (s *FiberServer) handleGetTopic(c *fiber.Ctx) error {
 
 	// Convert to API format and calculate stats
 	topic := fromTopicInfo(topicInfo)
-	
+
 	// Calculate MessageCount and TotalBytes from storage
 	var messageCount int64
 	var totalBytes int64
@@ -302,7 +302,7 @@ func (s *FiberServer) handleGetTopic(c *fiber.Ctx) error {
 	}
 	topic.MessageCount = messageCount
 	topic.TotalBytes = totalBytes
-	
+
 	// Cache with updated stats
 	s.topicsMutex.Lock()
 	s.topics[topicName] = topic
@@ -329,7 +329,7 @@ func (s *FiberServer) handleUpdateTopic(c *fiber.Ctx) error {
 
 	// Update topic in storage
 	ctx := c.Context()
-	
+
 	// Get existing topic
 	topicInfo, err := s.storage.GetTopicInfo(ctx, types.TopicName(topicName))
 	if err != nil {
@@ -338,7 +338,7 @@ func (s *FiberServer) handleUpdateTopic(c *fiber.Ctx) error {
 			"error":   fmt.Sprintf("Topic '%s' not found", topicName),
 		})
 	}
-	
+
 	// Update config if provided
 	if req.Config != nil {
 		topicInfo.Config["retention_ms"] = strconv.FormatInt(req.Config.RetentionMs, 10)
@@ -346,7 +346,7 @@ func (s *FiberServer) handleUpdateTopic(c *fiber.Ctx) error {
 		topicInfo.Config["max_message_bytes"] = strconv.FormatInt(req.Config.MaxMessageBytes, 10)
 		topicInfo.Config["min_insync_replicas"] = strconv.Itoa(req.Config.MinInSyncReplicas)
 	}
-	
+
 	// Note: Storage interface doesn't have UpdateTopic, so delete and recreate
 	// In production, this should be atomic or use a dedicated Update method
 	if err := s.storage.DeleteTopic(ctx, types.TopicName(topicName)); err != nil {
@@ -358,7 +358,7 @@ func (s *FiberServer) handleUpdateTopic(c *fiber.Ctx) error {
 			"error":   fmt.Sprintf("Failed to update topic: %v", err),
 		})
 	}
-	
+
 	// Update cache
 	s.topicsMutex.Lock()
 	if cachedTopic, exists := s.topics[topicName]; exists {
@@ -367,7 +367,7 @@ func (s *FiberServer) handleUpdateTopic(c *fiber.Ctx) error {
 		}
 	}
 	s.topicsMutex.Unlock()
-	
+
 	log.Printf("[Native API] Updated topic in storage: %s", topicName)
 
 	return c.JSON(fiber.Map{
@@ -473,19 +473,19 @@ func (s *FiberServer) handleGetTopicPartitions(c *fiber.Ctx) error {
 			"error":   fmt.Sprintf("Topic '%s' not found", topicName),
 		})
 	}
-	
+
 	// Build partition info for each partition
 	partitions := make([]fiber.Map, partitionCount)
 	for i := int32(0); i < partitionCount; i++ {
 		firstOffset, _ := s.storage.GetEarliestOffset(ctx, types.TopicName(topicName), i)
 		lastOffset, _ := s.storage.GetLatestOffset(ctx, types.TopicName(topicName), i)
 		messageCount := lastOffset - firstOffset
-		
+
 		partitions[i] = fiber.Map{
 			"partition":     i,
-			"leader":        1,                 // Single node, always leader
-			"replicas":      []int{1},          // Single replica
-			"isr":           []int{1},          // Always in-sync
+			"leader":        1,        // Single node, always leader
+			"replicas":      []int{1}, // Single replica
+			"isr":           []int{1}, // Always in-sync
 			"first_offset":  firstOffset,
 			"last_offset":   lastOffset,
 			"message_count": messageCount,
@@ -520,7 +520,7 @@ func (s *FiberServer) handleCompactTopic(c *fiber.Ctx) error {
 			log.Printf("[Native API] Compaction completed for topic %s", topicName)
 		}
 	}()
-	
+
 	log.Printf("[Native API] Compaction triggered for topic: %s", topicName)
 
 	return c.JSON(fiber.Map{
@@ -536,7 +536,7 @@ func (s *FiberServer) handlePurgeTopic(c *fiber.Ctx) error {
 
 	// Purge all messages from topic (delete + recreate for atomic purge)
 	ctx := c.Context()
-	
+
 	// Get topic info before deletion
 	topicInfo, err := s.storage.GetTopicInfo(ctx, types.TopicName(topicName))
 	if err != nil {
@@ -545,7 +545,7 @@ func (s *FiberServer) handlePurgeTopic(c *fiber.Ctx) error {
 			"error":   fmt.Sprintf("Topic '%s' not found", topicName),
 		})
 	}
-	
+
 	// Delete topic (this deletes all messages)
 	if err := s.storage.DeleteTopic(ctx, types.TopicName(topicName)); err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -553,7 +553,7 @@ func (s *FiberServer) handlePurgeTopic(c *fiber.Ctx) error {
 			"error":   fmt.Sprintf("Failed to purge topic: %v", err),
 		})
 	}
-	
+
 	// Recreate topic with same config (fresh, no messages)
 	if err := s.storage.CreateTopic(ctx, topicInfo); err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -561,7 +561,7 @@ func (s *FiberServer) handlePurgeTopic(c *fiber.Ctx) error {
 			"error":   fmt.Sprintf("Failed to recreate topic after purge: %v", err),
 		})
 	}
-	
+
 	log.Printf("[Native API] Purged all messages from topic: %s", topicName)
 
 	return c.JSON(fiber.Map{

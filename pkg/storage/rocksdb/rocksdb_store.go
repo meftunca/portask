@@ -16,13 +16,13 @@ import (
 
 // RocksDBStore implements MessageStore using RocksDB for local storage
 type RocksDBStore struct {
-	db       *grocksdb.DB
-	wo       *grocksdb.WriteOptions
-	ro       *grocksdb.ReadOptions
-	opts     *grocksdb.Options
-	dataDir  string
-	mu       sync.RWMutex
-	
+	db      *grocksdb.DB
+	wo      *grocksdb.WriteOptions
+	ro      *grocksdb.ReadOptions
+	opts    *grocksdb.Options
+	dataDir string
+	mu      sync.RWMutex
+
 	// Metrics
 	messagesWritten atomic.Int64
 	messagesRead    atomic.Int64
@@ -33,7 +33,7 @@ type RocksDBStore struct {
 // Config for RocksDB
 type Config struct {
 	DataDir string
-	
+
 	// Performance tuning
 	WriteBufferSize      int  // Default: 64MB
 	MaxWriteBufferNumber int  // Default: 3
@@ -59,51 +59,51 @@ func NewRocksDBStore(config *Config) (*RocksDBStore, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
-	
+
 	if config.DataDir == "" {
 		config.DataDir = "./rocksdb_data"
 	}
-	
+
 	// Create data directory
 	if err := os.MkdirAll(config.DataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data dir: %w", err)
 	}
-	
+
 	// RocksDB options optimized for write-heavy workloads
 	opts := grocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
-	
+
 	// Compression
 	if config.EnableCompression {
 		opts.SetCompression(grocksdb.LZ4Compression)
 	} else {
 		opts.SetCompression(grocksdb.NoCompression)
 	}
-	
+
 	// Memory & write buffer
 	opts.SetWriteBufferSize(uint64(config.WriteBufferSize))
 	opts.SetMaxWriteBufferNumber(config.MaxWriteBufferNumber)
 	opts.SetMinWriteBufferNumberToMerge(1)
-	
+
 	// File sizes
-	opts.SetTargetFileSizeBase(64 * 1024 * 1024) // 64MB
+	opts.SetTargetFileSizeBase(64 * 1024 * 1024)    // 64MB
 	opts.SetMaxBytesForLevelBase(256 * 1024 * 1024) // 256MB
-	
+
 	// Background jobs
 	opts.SetMaxBackgroundJobs(config.MaxBackgroundJobs)
-	
+
 	// Performance optimizations
 	opts.SetBytesPerSync(1024 * 1024) // 1MB
-	
+
 	// Disable stats for speed
 	opts.SetStatsDumpPeriodSec(0)
-	
+
 	// Open database
 	db, err := grocksdb.OpenDb(opts, config.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open rocksdb: %w", err)
 	}
-	
+
 	// Write options
 	wo := grocksdb.NewDefaultWriteOptions()
 	if config.DisableWAL {
@@ -111,11 +111,11 @@ func NewRocksDBStore(config *Config) (*RocksDBStore, error) {
 	} else {
 		wo.SetSync(false) // Async writes
 	}
-	
+
 	// Read options
 	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetVerifyChecksums(false) // Skip checksums for speed
-	
+
 	return &RocksDBStore{
 		db:      db,
 		wo:      wo,
@@ -132,19 +132,19 @@ func (r *RocksDBStore) Store(ctx context.Context, message *types.PortaskMessage)
 	if err != nil {
 		return fmt.Errorf("serialization failed: %w", err)
 	}
-	
+
 	// Generate key
 	key := []byte(fmt.Sprintf("msg:%s", message.ID))
-	
+
 	// Write to RocksDB
 	if err := r.db.Put(r.wo, key, data); err != nil {
 		return fmt.Errorf("rocksdb write failed: %w", err)
 	}
-	
+
 	// Update metrics
 	r.messagesWritten.Add(1)
 	r.bytesWritten.Add(int64(len(data)))
-	
+
 	return nil
 }
 
@@ -153,33 +153,33 @@ func (r *RocksDBStore) StoreBatch(ctx context.Context, batch *types.MessageBatch
 	if batch == nil || len(batch.Messages) == 0 {
 		return nil
 	}
-	
+
 	// Use RocksDB WriteBatch for atomic batch writes
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
-	
+
 	for _, message := range batch.Messages {
 		// Serialize
 		data, err := json.Marshal(message)
 		if err != nil {
 			return fmt.Errorf("serialization failed for %s: %w", message.ID, err)
 		}
-		
+
 		// Add to batch
 		key := []byte(fmt.Sprintf("msg:%s", message.ID))
 		wb.Put(key, data)
-		
+
 		// Update metrics
 		r.bytesWritten.Add(int64(len(data)))
 	}
-	
+
 	// Write entire batch atomically
 	if err := r.db.Write(r.wo, wb); err != nil {
 		return fmt.Errorf("batch write failed: %w", err)
 	}
-	
+
 	r.messagesWritten.Add(int64(len(batch.Messages)))
-	
+
 	return nil
 }
 
@@ -194,12 +194,12 @@ func (r *RocksDBStore) Fetch(ctx context.Context, topic types.TopicName, partiti
 func (r *RocksDBStore) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if r.db != nil {
 		r.db.Close()
 		r.db = nil
 	}
-	
+
 	return nil
 }
 
@@ -305,4 +305,3 @@ func (r *RocksDBStore) Ping(ctx context.Context) error {
 func (r *RocksDBStore) Cleanup(ctx context.Context, retentionPolicy *storage.RetentionPolicy) error {
 	return nil
 }
-

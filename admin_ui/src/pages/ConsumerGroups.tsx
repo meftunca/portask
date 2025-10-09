@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { apiBase } from '@/lib/api'
 import {
   Activity,
   AlertCircle,
@@ -26,7 +27,6 @@ import {
   Users
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { apiBase } from '@/lib/api'
 
 interface ConsumerGroup {
   id: string
@@ -126,14 +126,14 @@ export default function ConsumerGroups() {
           assignment: m.assignment || []
         }))
       }
-      
+
       setGroupDetails(group)
 
       // Fetch lag info from backend
       try {
         const lagRes = await apiBase.get(`/api/v1/kafka/consumer-groups/${groupName}/lag`)
         const backendLag = lagRes.data?.lag || []
-        
+
         const formattedLag: GroupLag[] = backendLag.map((l: any) => ({
           group: groupName,
           topic: l.topic || 'unknown',
@@ -142,7 +142,7 @@ export default function ConsumerGroups() {
           logEndOffset: l.log_end_offset || l.logEndOffset || 0,
           lag: l.lag || 0
         }))
-        
+
         setGroupLag(formattedLag)
       } catch (lagErr) {
         console.error('Failed to fetch group lag:', lagErr)

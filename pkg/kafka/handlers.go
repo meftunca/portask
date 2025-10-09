@@ -180,7 +180,8 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 	binary.Read(reqBuf, binary.BigEndian, &topicCount)
 	log.Printf("🔍 Produce request - topicCount: %d", topicCount)
 
-	// Build response
+	// Build response - ✅ FIX: Throttle time MUST be first!
+	binary.Write(&buf, binary.BigEndian, int32(0))          // throttle_time_ms (FIRST!)
 	binary.Write(&buf, binary.BigEndian, int32(topicCount)) // topic count
 
 	for i := int32(0); i < topicCount; i++ {
@@ -212,11 +213,11 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 			// ✅ NEW ARCHITECTURE: Kafka → Translator → Processor → Storage
 			var offset int64
 			var err error
-			
+
 			if h.bridge != nil {
 				// Use new architecture (Translator + Processor + Storage)
 				log.Printf("🏗️ Using NEW architecture: Translator → Processor → Storage")
-				
+
 				// 1. Translate Kafka wire protocol to Portask message
 				portaskMsg, transErr := h.translator.TranslateProduce(topic, partition, nil, messageSet)
 				if transErr != nil {
@@ -234,7 +235,7 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 				log.Printf("⚠️ Using LEGACY architecture: Direct storage")
 				offset, err = h.messageStore.ProduceMessage(topic, partition, nil, messageSet)
 			}
-			
+
 			if err != nil {
 				log.Printf("❌ Failed to produce message to %s[%d]: %v", topic, partition, err)
 			} else {
@@ -255,8 +256,8 @@ func (h *KafkaProtocolHandler) handleProduce(request *KafkaRequest) []byte {
 		}
 	}
 
-	// Throttle time
-	binary.Write(&buf, binary.BigEndian, int32(0))
+	// ✅ FIX: Throttle time already written at the beginning, don't duplicate!
+	// binary.Write(&buf, binary.BigEndian, int32(0)) // REMOVED: duplicate throttle_time
 
 	log.Printf("✅ Produce API response created - response size: %d bytes", buf.Len())
 
@@ -319,11 +320,11 @@ func (h *KafkaProtocolHandler) handleFetch(request *KafkaRequest) []byte {
 			// ✅ NEW ARCHITECTURE: Kafka → Translator → Processor → Storage
 			var messages []*Message
 			var err error
-			
+
 			if h.bridge != nil && h.translator != nil {
 				// Use new architecture (Translator + Bridge)
 				log.Printf("🏗️ Using NEW architecture for Fetch: Translator → Bridge")
-				
+
 				// 1. Translate Kafka Fetch request to Portask fetch request
 				fetchReq, transErr := h.translator.TranslateFetch(topic, partition, fetchOffset, partitionMaxBytes)
 				if transErr != nil {

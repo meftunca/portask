@@ -15,34 +15,34 @@ import (
 
 // WebSocketSubscription represents a WebSocket subscription
 type WebSocketSubscription struct {
-	ID             string   `json:"id"`
-	Topics         []string `json:"topics"`
-	GroupID        string   `json:"group_id"`
-	ConnectedAt    string   `json:"connected_at"`
-	MessagesRecved int64    `json:"messages_received"`
+	ID             string          `json:"id"`
+	Topics         []string        `json:"topics"`
+	GroupID        string          `json:"group_id"`
+	ConnectedAt    string          `json:"connected_at"`
+	MessagesRecved int64           `json:"messages_received"`
 	Conn           *websocket.Conn `json:"-"` // Internal: WebSocket connection
 }
 
 // WSSubscribeRequest for subscribing to topics
 type WSSubscribeRequest struct {
-	Topics  []string `json:"topics" validate:"required"`
-	GroupID string   `json:"group_id"` // Optional: for consumer group
-	Filters map[string]interface{} `json:"filters"` // Optional: message filters
+	Topics  []string               `json:"topics" validate:"required"`
+	GroupID string                 `json:"group_id"` // Optional: for consumer group
+	Filters map[string]interface{} `json:"filters"`  // Optional: message filters
 }
 
 // WSMessage represents a message sent over WebSocket
 type WSMessage struct {
-	Type      string      `json:"type"` // "message", "control", "error"
-	MessageID string      `json:"message_id,omitempty"`
-	Topic     string      `json:"topic,omitempty"`
-	Partition int32       `json:"partition,omitempty"`
-	Offset    int64       `json:"offset,omitempty"`
-	Key       string      `json:"key,omitempty"`
-	Value     interface{} `json:"value,omitempty"`
+	Type      string                 `json:"type"` // "message", "control", "error"
+	MessageID string                 `json:"message_id,omitempty"`
+	Topic     string                 `json:"topic,omitempty"`
+	Partition int32                  `json:"partition,omitempty"`
+	Offset    int64                  `json:"offset,omitempty"`
+	Key       string                 `json:"key,omitempty"`
+	Value     interface{}            `json:"value,omitempty"`
 	Headers   map[string]interface{} `json:"headers,omitempty"`
-	Timestamp string      `json:"timestamp,omitempty"`
-	Error     string      `json:"error,omitempty"`
-	Control   string      `json:"control,omitempty"` // "subscribed", "unsubscribed", "ack_required"
+	Timestamp string                 `json:"timestamp,omitempty"`
+	Error     string                 `json:"error,omitempty"`
+	Control   string                 `json:"control,omitempty"` // "subscribed", "unsubscribed", "ack_required"
 }
 
 // WSAckRequest for acknowledging messages via WebSocket
@@ -81,7 +81,7 @@ func (s *FiberServer) handleWebSocketUpgrade(c *fiber.Ctx) error {
 // handleWebSocketSubscribe handles WebSocket subscriptions
 func (s *FiberServer) handleWebSocketSubscribe(c *websocket.Conn) {
 	subscriptionID := generateSubscriptionID()
-	
+
 	log.Printf("[WS] New WebSocket connection: %s", subscriptionID)
 
 	// Send welcome message
@@ -181,30 +181,30 @@ func (wm *WebSocketManager) StreamMessage(topic string, msg interface{}) {
 				break
 			}
 		}
-		
+
 		if !topicMatches {
 			continue
 		}
-		
+
 		// Send message to this subscription's WebSocket
 		// Wrap message in envelope
 		envelope := fiber.Map{
-			"type":    "message",
-			"topic":   topic,
-			"message": msg,
+			"type":      "message",
+			"topic":     topic,
+			"message":   msg,
 			"timestamp": time.Now().Format(time.RFC3339),
 		}
-		
+
 		// Send to WebSocket (using goroutine to avoid blocking)
 		go func(c *websocket.Conn) {
 			if err := c.WriteJSON(envelope); err != nil {
 				log.Printf("[WS] Failed to send message to client: %v", err)
 			}
 		}(sub.Conn)
-		
+
 		sentCount++
 	}
-	
+
 	log.Printf("[WS] Streamed message to topic %s: %d clients notified", topic, sentCount)
 }
 
@@ -212,4 +212,3 @@ func (wm *WebSocketManager) StreamMessage(topic string, msg interface{}) {
 func toJSON(v interface{}) ([]byte, error) {
 	return json.Marshal(v)
 }
-

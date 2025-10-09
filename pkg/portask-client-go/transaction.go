@@ -3,6 +3,7 @@ package portask
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // TransactionClient manages transactions
@@ -44,7 +45,7 @@ func (tc *TransactionClient) Begin(ctx context.Context, timeoutMs int64, topics 
 			}
 		}
 	}
-	
+
 	txn := &Transaction{
 		ID:        response.TransactionID,
 		State:     response.State,
@@ -98,4 +99,3 @@ func (tc *TransactionClient) Delete(ctx context.Context, transactionID string) e
 	path := fmt.Sprintf("/api/v1/transactions/%s", transactionID)
 	return tc.client.delete(ctx, path)
 }
-
